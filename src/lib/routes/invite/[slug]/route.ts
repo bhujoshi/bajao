@@ -1,0 +1,161 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  getAuthenticatedUserFromCookies,
+  hydrateBackupWeddingsFromCookie,
+} from "@/lib/auth";
+import {
+  getWeddingAccess,
+  mapGuestToDTO,
+  submitGuestRsvp,
+  trackAnalyticsEvent,
+} from "@/lib/db";
+import { prisma } from "@/lib/prisma";
+import { RsvpStatus } from "@/lib/types";
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { slug: string } }
+) {
+  await hydrateBackupWeddingsFromCookie();
+
+  const wedding = await prisma.wedding.findFirst({
+    where: {
+      OR: [{ slug: params.slug }, { id: params.slug }],
+    },
+  });
+
+  if (!wedding) {
+    return NextResponse.json(
+      { error: "Invitation not found." },
+      { status: 404 }
+    );
+  }
+
+  const inviteToken = req.nextUrl.searchParams.get("guest") || undefined;
+  const currentUser = await getAuthenticatedUserFromCookies();
+
+  let matchedGuestRow = inviteToken
+    ? await prisma.guest.findFirst({
+        where: { weddingId: wedding.id, inviteToken },
+      })
+    : null;
+
+  if (matchedGuestRow) {
+    if (
+      matchedGuestRow.invitationStatus === "not_shared" ||
+      matchedGuestRow.invitationStatus === "link_shared"
+    ) {
+      matchedGuestRow = await prisma.guest.update({
+        where: { id: matchedGuestRow.id },
+        data: { invitationStatus: "opened" },
+      });
+    }
+  }
+
+  const access = await getWeddingAccess(wedding.id, currentUser?.id);
+  const matchedGuestDTO = matchedGuestRow
+    ? mapGuestToDTO(matchedGuestRow)
+    : access.guestRecord || null;
+
+  await trackAnalyticsEvent({
+    weddingId: wedding.id,
+    eventType: "invitation_opened",
+    actorRole: currentUser
+      ? access.role === "host"
+        ? "host"
+        : "guest"
+      : "anonymous",
+    summary: "Guest opened wedding invitation page",
+    metadata: {
+      personalizedLink: Boolean(inviteToken),
+    },
+  });
+
+  const publishedUpdatesCount = await prisma.eventUpdate.count({
+    where: {
+      weddingId: wedding.id,
+      publicationStatus: "published",
+    },
+  });
+
+  return NextResponse.json({
+    wedding: {
+      id: wedding.id,
+      slug: wedding.slug,
+      coupleNames: wedding.coupleNames,
+      eventTitle: wedding.eventTitle,
+      date: wedding.date.toISOString(),
+      endDate: wedding.endDate ? wedding.endDate.toISOString() : null,
+      venue: wedding.venue,
+      description: wedding.description,
+    },
+    personalizedGuest: matchedGuestDTO
+      ? {
+          id: matchedGuestDTO.id,
+          name: matchedGuestDTO.name,
+          email: matchedGuestDTO.email || "",
+          phone: matchedGuestDTO.phone || "",
+          inviteToken: matchedGuestDTO.inviteToken,
+          rsvpStatus: matchedGuestDTO.rsvpStatus,
+          rsvpNote: matchedGuestDTO.rsvpNote || "",
+          rsvpUpdatedAt: matchedGuestDTO.rsvpUpdatedAt,
+          isLinkedToUser: Boolean(matchedGuestDTO.linkedUserId),
+        }
+      : null,
+    viewerAccess: {
+      isAuthenticated: Boolean(currentUser),
+      role: access.role,
+      canViewUpdates: access.canViewUpdates,
+      canManage: access.canManage,
+      publishedUpdatesCount,
+    },
+  });
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { slug: string } }
+) {
+  try {
+    const body = await req.json();
+    const currentUser = await getAuthenticatedUserFromCookies();
+
+    const { name, email, phone, rsvpStatus, rsvpNote, inviteToken } = body as {
+      name?: string;
+      email?: string;
+      phone?: string;
+      rsvpStatus?: RsvpStatus;
+      rsvpNote?: string;
+      inviteToken?: string;
+    };
+
+    const result = await submitGuestRsvp({
+      weddingSlugOrId: params.slug,
+      inviteToken,
+      name: name || "",
+      email,
+      phone,
+      rsvpStatus: (rsvpStatus || "yes") as RsvpStatus,
+      rsvpNote,
+      authenticatedUserId: currentUser?.id,
+    });
+
+    return NextResponse.json({
+      guest: {
+        id: result.guest.id,
+        name: result.guest.name,
+        email: result.guest.email,
+        phone: result.guest.phone,
+        inviteToken: result.guest.inviteToken,
+        rsvpStatus: result.guest.rsvpStatus,
+        rsvpNote: result.guest.rsvpNote,
+        rsvpUpdatedAt: result.guest.rsvpUpdatedAt,
+      },
+      resolutionType: result.resolutionType,
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Failed to submit RSVP.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

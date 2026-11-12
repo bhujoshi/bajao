@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String            @id @default(cuid())
+  name                String
+  email               String?           @unique
+  phone               String?           @unique
+  googleSub           String?           @unique
+  avatarUrl           String?
+  accountStatus       String            @default("verified") // "pending" | "verified"
+  onboardingCompleted Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  ownedWeddings       Wedding[]         @relation("WeddingOwner")
+  memberships         EventMembership[]
+  linkedGuests        Guest[]
+  authoredUpdates     EventUpdate[]
+  sessions            Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model OtpVerification {
+  id         String    @id @default(cuid())
+  identifier String
+  channel    String    // "email" | "phone"
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([identifier, channel])
+}
+
+model Wedding {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  ownerUserId String
+  owner       User              @relation("WeddingOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  eventTitle  String
+  coupleNames String
+  date        DateTime
+  endDate     DateTime?
+  venue       String
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  guests      Guest[]
+  updates     EventUpdate[]
+  memberships EventMembership[]
+  analytics   AnalyticsEvent[]
+
+  @@index([ownerUserId])
+}
+
+model Guest {
+  id                       String    @id @default(cuid())
+  weddingId                String
+  wedding                  Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  name                     String
+  email                    String?
+  phone                    String?
+  inviteToken              String    @unique @default(cuid())
+  invitationStatus         String    @default("not_shared") // "not_shared" | "link_shared" | "opened" | "responded"
+  rsvpStatus               String    @default("pending")    // "pending" | "yes" | "no" | "maybe"
+  rsvpNote                 String?
+  rsvpUpdatedAt            DateTime?
+  linkedUserId             String?
+  linkedUser               User?     @relation(fields: [linkedUserId], references: [id], onDelete: SetNull)
+  source                   String    @default("manual")     // "manual" | "contact_picker" | "file_import" | "self_rsvp"
+  hasConflict              Boolean   @default(false)
+  conflictReason           String?
+  conflictIncomingName     String?
+  conflictIncomingEmail    String?
+  conflictIncomingPhone    String?
+  conflictIncomingRsvp     String?
+  conflictIncomingNote     String?
+  conflictDuplicateGuestId String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@index([weddingId])
+  @@index([weddingId, email])
+  @@index([weddingId, phone])
+  @@index([linkedUserId])
+}
+
+model EventUpdate {
+  id                String   @id @default(cuid())
+  weddingId         String
+  wedding           Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  authorUserId      String
+  author            User     @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  textContent       String
+  category          String   @default("announcement") // "announcement" | "schedule" | "logistics" | "welcome"
+  isPinned          Boolean  @default(false)
+  publicationStatus String   @default("published")    // "published" | "archived"
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([weddingId, publicationStatus, createdAt])
+}
+
+model EventMembership {
+  id               String   @id @default(cuid())
+  weddingId        String
+  wedding          Wedding  @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role             String   @default("guest")  // "host" | "guest"
+  membershipStatus String   @default("active") // "active" | "revoked"
+  linkedGuestId    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([weddingId, userId])
+  @@index([userId])
+}
+
+model AnalyticsEvent {
+  id           String   @id @default(cuid())
+  weddingId    String?
+  wedding      Wedding? @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  eventType    String
+  actorRole    String   // "host" | "guest" | "anonymous"
+  summary      String
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  @@index([weddingId, createdAt])
+  @@index([eventType])
+}
