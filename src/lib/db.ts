@@ -1,3 +1,4 @@
+import { parseEventSetup, normalizeEventSetup, EVENT_TYPES, missingEventDetails, validateSubEventDates, invitationOptions } from "./event-setup";
 import crypto from "crypto";
 import { Guest, Wedding, User, EventUpdate, AnalyticsEvent } from "@prisma/client";
 import { prisma } from "./prisma";
@@ -75,6 +76,9 @@ export function mapWeddingToDTO(w: Wedding): WeddingDTO {
   return {
     id: w.id,
     slug: w.slug,
+    eventType: w.eventType,
+    otherEventType: w.otherEventType,
+    setup: parseEventSetup(w.setupDetails),
     ownerUserId: w.ownerUserId,
     eventTitle: w.eventTitle,
     coupleNames: w.coupleNames,
@@ -104,6 +108,7 @@ export function mapGuestToDTO(g: Guest): GuestDTO {
   return {
     id: g.id,
     weddingId: g.weddingId,
+    invitationKey: g.invitationKey,
     name: g.name,
     email: g.email,
     phone: g.phone,
@@ -367,7 +372,7 @@ export async function upsertVerifiedUser(params: {
         ...(canSetEmail ? { email: cleanEmail } : {}),
         ...(canSetPhone ? { phone: cleanPhone } : {}),
         ...(params.googleSub ? { googleSub: params.googleSub } : {}),
-        ...(params.avatarUrl ? { avatarUrl: params.avatarUrl } : {}),
+        ...(params.avatarUrl && !existingUser.avatarImage ? { avatarUrl: params.avatarUrl } : {}),
         accountStatus: "verified",
       },
     });
@@ -535,6 +540,8 @@ async function generateUniqueWeddingSlug(
  * FR-02: Create a wedding with field and date range validation.
  */
 export async function createWedding(params: {
+  eventType?: string;
+  otherEventType?: string;
   ownerUserId: string;
   coupleNames: string;
   eventTitle: string;
@@ -543,7 +550,11 @@ export async function createWedding(params: {
   venue: string;
   description?: string;
 }): Promise<WeddingDTO> {
-  const coupleNames = params.coupleNames.trim();
+  const eventType = params.eventType || "Wedding";
+  if (!EVENT_TYPES.includes(eventType)) throw new Error("Choose a valid event type.");
+  const otherEventType = params.otherEventType?.trim() || "";
+  if (eventType === "Other" && !otherEventType) throw new Error("Name your event type.");
+  const coupleNames = eventType === "Wedding" ? params.coupleNames.trim() : params.eventTitle.trim();
   const eventTitle = params.eventTitle.trim();
   const venue = params.venue.trim();
   const description = params.description?.trim() || null;
@@ -560,7 +571,7 @@ export async function createWedding(params: {
 
   const parsedDate = new Date(params.date);
   if (isNaN(parsedDate.getTime())) {
-    throw new Error("Please provide a valid start date and time (From).");
+    throw new Error("Please provide a valid start date (From).");
   }
   if (parsedDate.getFullYear() < 2024 || parsedDate.getFullYear() > 2036) {
     throw new Error("Please enter a valid start date between 2024 and 2036.");
@@ -568,14 +579,14 @@ export async function createWedding(params: {
 
   const parsedEndDate = new Date(params.endDate);
   if (isNaN(parsedEndDate.getTime())) {
-    throw new Error("Please provide a valid end date and time (To).");
+    throw new Error("Please provide a valid end date (To).");
   }
   if (parsedEndDate.getFullYear() < 2024 || parsedEndDate.getFullYear() > 2036) {
     throw new Error("Please enter a valid end date between 2024 and 2036.");
   }
   if (parsedEndDate.getTime() < parsedDate.getTime()) {
     throw new Error(
-      "The end date and time (To) must be after the start date and time (From)."
+      "The end date (To) must be on or after the start date (From)."
     );
   }
 
@@ -585,6 +596,8 @@ export async function createWedding(params: {
     const w = await tx.wedding.create({
       data: {
         slug,
+        eventType,
+        otherEventType,
         ownerUserId: params.ownerUserId,
         coupleNames,
         eventTitle,
@@ -627,6 +640,7 @@ export async function updateWedding(
   weddingId: string,
   ownerUserId: string,
   updates: {
+    setup?: unknown;
     coupleNames?: string;
     eventTitle?: string;
     date?: string;
@@ -648,6 +662,7 @@ export async function updateWedding(
   }
 
   const dataToUpdate: {
+    setupDetails?: string;
     coupleNames?: string;
     eventTitle?: string;
     date?: Date;
@@ -680,14 +695,14 @@ export async function updateWedding(
   if (updates.date !== undefined) {
     const parsed = new Date(updates.date);
     if (isNaN(parsed.getTime())) {
-      throw new Error("Please provide a valid start date and time (From).");
+      throw new Error("Please provide a valid start date (From).");
     }
     dataToUpdate.date = parsed;
   }
   if (updates.endDate !== undefined) {
     const parsedEnd = new Date(updates.endDate);
     if (isNaN(parsedEnd.getTime())) {
-      throw new Error("Please provide a valid end date and time (To).");
+      throw new Error("Please provide a valid end date (To).");
     }
     dataToUpdate.endDate = parsedEnd;
   }
@@ -697,7 +712,7 @@ export async function updateWedding(
     dataToUpdate.endDate !== undefined ? dataToUpdate.endDate : wedding.endDate;
   if (finalEndDate && finalEndDate.getTime() < finalStartDate.getTime()) {
     throw new Error(
-      "The end date and time (To) must be after the start date and time (From)."
+      "The end date (To) must be on or after the start date (From)."
     );
   }
 
@@ -705,6 +720,18 @@ export async function updateWedding(
     dataToUpdate.description = updates.description.trim() || null;
   }
 
+  if (updates.setup !== undefined) {
+    const setup = normalizeEventSetup(updates.setup);
+    for (const asset of [setup.card, ...setup.photos, ...setup.subEvents.map(sub => sub.card)].filter(Boolean)) {
+      const stored = asset && await prisma.eventAsset.findFirst({ where: { id: asset.id, weddingId } });
+      if (!stored || !asset) throw new Error("Upload media to this event before saving.");
+      asset.name = stored.name; asset.mime = stored.mime;
+    }
+    if (setup.photos.some(photo => !photo.mime.startsWith("image/"))) throw new Error("Couple photos must be images.");
+    validateSubEventDates(setup, finalStartDate, finalEndDate);
+    dataToUpdate.setupDetails = JSON.stringify(setup);
+  }
+  if (updates.setup === undefined) validateSubEventDates(parseEventSetup(wedding.setupDetails), finalStartDate, finalEndDate);
   const updated = await prisma.wedding.update({
     where: { id: weddingId },
     data: dataToUpdate,
@@ -718,6 +745,7 @@ export async function updateWedding(
  * Never automatically sends invitations (invitationStatus starts as 'not_shared').
  */
 export async function addGuestsToWedding(params: {
+  invitationKey: string;
   weddingId: string;
   ownerUserId: string;
   source: GuestSource;
@@ -747,6 +775,8 @@ export async function addGuestsToWedding(params: {
     );
   }
 
+  const choices = invitationOptions(mapWeddingToDTO(wedding));
+  if (!choices.some(option => option.key === params.invitationKey)) throw new Error("Select an available invitation card for these guests.");
   const existingGuests = await prisma.guest.findMany({
     where: { weddingId: wedding.id },
   });
@@ -803,6 +833,7 @@ export async function addGuestsToWedding(params: {
     const createdGuest = await prisma.guest.create({
       data: {
         weddingId: wedding.id,
+        invitationKey: params.invitationKey,
         name,
         email,
         phone,
@@ -876,6 +907,7 @@ export async function addGuestsToWedding(params: {
  */
 export async function submitGuestRsvp(params: {
   weddingSlugOrId: string;
+  invitationKey?: string;
   inviteToken?: string;
   name: string;
   email?: string | null;
@@ -912,6 +944,11 @@ export async function submitGuestRsvp(params: {
   if (!wedding) {
     throw new Error("Wedding invitation not found.");
   }
+  if (missingEventDetails(mapWeddingToDTO(wedding)).length) throw new Error("The host is still completing this event invitation.");
+
+
+  const choices = invitationOptions(mapWeddingToDTO(wedding));
+  if (params.invitationKey && !choices.some(o => o.key === params.invitationKey)) throw new Error("Choose an available invitation.");
 
   const weddingGuests = await prisma.guest.findMany({
     where: { weddingId: wedding.id },
@@ -1034,6 +1071,7 @@ export async function submitGuestRsvp(params: {
         rsvpUpdatedAt: now,
         linkedUserId: params.authenticatedUserId || null,
         source: "self_rsvp",
+        invitationKey: params.invitationKey || choices[0]?.key || "overall",
       },
     });
   }
@@ -1144,6 +1182,7 @@ export async function resolveGuestConflict(params: {
           rsvpNote: guest.conflictIncomingNote,
           rsvpUpdatedAt: now,
           source: "self_rsvp",
+        invitationKey: guest.invitationKey,
         },
       });
     }

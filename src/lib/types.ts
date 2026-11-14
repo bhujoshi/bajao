@@ -12,7 +12,12 @@ export interface UserDTO {
   createdAt: string;
 }
 
+import type { EventSetup } from "./event-setup";
+
 export interface WeddingDTO {
+  eventType: string;
+  otherEventType: string;
+  setup: EventSetup;
   id: string;
   slug: string;
   ownerUserId: string;
@@ -26,16 +31,15 @@ export interface WeddingDTO {
   updatedAt: string;
 }
 
-export function formatDateTimeStamp(isoString?: string | null): string {
+export function formatWeddingDate(isoString?: string | null): string {
   if (!isoString) return "";
   const d = new Date(isoString);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleString("en-US", {
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    timeZone: "UTC",
   });
 }
 
@@ -43,8 +47,8 @@ export function formatWeddingDateRange(
   startIso: string,
   endIso?: string | null
 ): string {
-  const fromStr = formatDateTimeStamp(startIso);
-  const toStr = formatDateTimeStamp(endIso);
+  const fromStr = formatWeddingDate(startIso);
+  const toStr = formatWeddingDate(endIso);
   if (fromStr && toStr) {
     return `From ${fromStr} to ${toStr}`;
   }
@@ -92,6 +96,7 @@ export interface GuestConflictDTO {
 }
 
 export interface GuestDTO {
+  invitationKey: string;
   id: string;
   weddingId: string;
   name: string;

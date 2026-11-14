@@ -1,5 +1,7 @@
 "use client";
 
+import CountryPhoneInput from "./CountryPhoneInput";
+import { validateIdentifier, validPhone } from "@/lib/contact-validation";
 import React, {
   createContext,
   useCallback,
@@ -185,11 +187,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSubmitting(true);
     setError(null);
     try {
+      const validatedIdentifier = validateIdentifier(identifier, channel);
+      if (channel === "email" && secondaryPhone && !validPhone(secondaryPhone)) throw new Error("Enter a valid optional phone number with its country code.");
       const res = await fetch("/api/auth/otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          identifier,
+          identifier: validatedIdentifier,
           channel,
         }),
       });
@@ -291,7 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               </h2>
               <p className="text-xs text-stone-500">
                 {modalOptions.subtitle ||
-                  "Verify your email or phone to manage your wedding or access live guest updates."}
+                  "Verify your email or phone to manage your events or access live guest updates."}
               </p>
             </div>
 
@@ -379,18 +383,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       ? "Email Address *"
                       : "Mobile Phone Number *"}
                   </label>
-                  <input
-                    type={channel === "email" ? "email" : "tel"}
-                    required
-                    placeholder={
-                      channel === "email"
-                        ? "you@example.com"
-                        : "+91 98765 43210"
-                    }
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm focus:border-rose-600 focus:outline-none"
-                  />
+                  {channel === "phone" ? <CountryPhoneInput label="Mobile phone number" required value={identifier} onChange={setIdentifier}/> : <input type="email" required placeholder="you@example.com" value={identifier} onChange={e=>setIdentifier(e.target.value)} className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm"/>}
                 </div>
 
                 <div>
@@ -411,13 +404,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     <label className="block text-xs font-medium text-stone-600 mb-1">
                       Phone Number (Optional — links phone invitations)
                     </label>
-                    <input
-                      type="tel"
-                      placeholder="+91 98765 43210"
-                      value={secondaryPhone}
-                      onChange={(e) => setSecondaryPhone(e.target.value)}
-                      className="w-full rounded-xl border border-stone-300 px-3.5 py-2 text-sm focus:border-rose-600 focus:outline-none"
-                    />
+                    <CountryPhoneInput label="Optional phone number" value={secondaryPhone} onChange={setSecondaryPhone} />
                   </div>
                 )}
 

@@ -32,3 +32,10 @@ input[type="time"] {
     background: linear-gradient(135deg, #881337 0%, #9f1239 50%, #73401e 100%);
   }
 }
+
+@keyframes memorica-confetti-fall {
+  0% { top: -15%; opacity: 1; transform: translateX(0) rotate(0deg); }
+  100% { top: 115%; opacity: 0; transform: translateX(35px) rotate(600deg); }
+}
+.memorica-confetti { position: absolute; top: -15%; width: 8px; height: 13px; border-radius: 2px; animation: memorica-confetti-fall 4s ease-out 1 both; }
+@media (prefers-reduced-motion: reduce) { .memorica-confetti { display: none; } }

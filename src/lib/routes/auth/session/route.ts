@@ -1,3 +1,4 @@
+import { validPhone } from "@/lib/contact-validation";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -217,6 +218,7 @@ export async function POST(req: NextRequest) {
 
       if (selectedChannel === "email") {
         verifiedEmail = verifiedIdentifier;
+        if (phone && !validPhone(phone)) throw new Error("Enter a valid phone number with country code.");
         verifiedPhone = normalizePhone(phone);
       } else {
         verifiedPhone = verifiedIdentifier;
@@ -275,7 +277,8 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, phone, onboardingCompleted } = body as {
+    const { name, phone, onboardingCompleted, profilePhoto } = body as {
+      profilePhoto?: string | null;
       name?: string;
       phone?: string;
       onboardingCompleted?: boolean;
@@ -288,6 +291,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    if (phone && !validPhone(phone)) throw new Error("Enter a valid phone number with its country code.");
     const cleanPhone =
       phone !== undefined ? normalizePhone(phone) : existing.phone;
 
@@ -304,9 +308,23 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    let photoUpdate = {};
+    if (profilePhoto !== undefined) {
+      if (profilePhoto === null) photoUpdate = { avatarImage: null, avatarMime: null, avatarUrl: null };
+      else {
+        if (typeof profilePhoto !== "string" || profilePhoto.length > 300000) throw new Error("Please choose a smaller profile photo.");
+        const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(profilePhoto);
+        if (!match) throw new Error("Choose a JPG, PNG or WebP profile photo.");
+        const image = Buffer.from(match[2], "base64");
+        const valid = match[1] === "jpeg" ? image.subarray(0,3).equals(Buffer.from([255,216,255])) : match[1] === "png" ? image.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : image.toString("ascii",0,4) === "RIFF" && image.toString("ascii",8,12) === "WEBP";
+        if (!valid) throw new Error("Invalid profile photo.");
+        photoUpdate = { avatarImage: image, avatarMime: `image/${match[1]}`, avatarUrl: `/api/auth/avatar?v=${Date.now()}` };
+      }
+    }
     const updatedUser = await prisma.user.update({
       where: { id: existing.id },
       data: {
+        ...photoUpdate,
         ...(name !== undefined && name.trim() ? { name: name.trim() } : {}),
         ...(phone !== undefined ? { phone: cleanPhone } : {}),
         ...(onboardingCompleted !== undefined
@@ -362,4 +380,12 @@ export async function DELETE() {
   res.cookies.delete(SESSION_COOKIE_NAME);
   res.cookies.delete(WEDDINGS_BACKUP_COOKIE_NAME);
   return res;
+}
+
+export async function avatar() {
+  const user = await getAuthenticatedUserFromCookies();
+  if (!user) return new NextResponse("Unauthorized", { status: 401 });
+  const profile = await prisma.user.findUnique({ where: { id: user.id }, select: { avatarImage: true, avatarMime: true } });
+  if (!profile?.avatarImage || !profile.avatarMime) return new NextResponse("Not found", { status: 404 });
+  return new NextResponse(new Uint8Array(profile.avatarImage), { headers: { "Content-Type": profile.avatarMime, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
 }

@@ -1,3 +1,4 @@
+import { missingEventDetails, invitationOptions } from "@/lib/event-setup";
 import { NextRequest, NextResponse } from "next/server";
 import {
   getAuthenticatedUserFromCookies,
@@ -6,6 +7,7 @@ import {
 import {
   getWeddingAccess,
   mapGuestToDTO,
+  mapWeddingToDTO,
   submitGuestRsvp,
   trackAnalyticsEvent,
 } from "@/lib/db";
@@ -33,6 +35,7 @@ export async function GET(
 
   const inviteToken = req.nextUrl.searchParams.get("guest") || undefined;
   const currentUser = await getAuthenticatedUserFromCookies();
+  if (currentUser?.id !== wedding.ownerUserId && missingEventDetails(mapWeddingToDTO(wedding)).length) return NextResponse.json({error:"The host is still completing this event invitation."},{status:403});
 
   let matchedGuestRow = inviteToken
     ? await prisma.guest.findFirst({
@@ -56,6 +59,11 @@ export async function GET(
   const matchedGuestDTO = matchedGuestRow
     ? mapGuestToDTO(matchedGuestRow)
     : access.guestRecord || null;
+
+  const choices = invitationOptions(mapWeddingToDTO(wedding));
+  const requestedKey = req.nextUrl.searchParams.get("invitation") || matchedGuestDTO?.invitationKey;
+  const selected = requestedKey ? choices.find(o => o.key === requestedKey) : choices[0];
+  if (!selected) return NextResponse.json({error:"This invitation card is unavailable. Please contact the host."}, {status:404});
 
   await trackAnalyticsEvent({
     weddingId: wedding.id,
@@ -88,6 +96,11 @@ export async function GET(
       endDate: wedding.endDate ? wedding.endDate.toISOString() : null,
       venue: wedding.venue,
       description: wedding.description,
+      eventType: wedding.eventType,
+      setup: mapWeddingToDTO(wedding).setup,
+      selectedInvitationKey: selected.key,
+      selectedInvitationTitle: selected.title,
+      selectedCard: selected.card,
     },
     personalizedGuest: matchedGuestDTO
       ? {
@@ -120,17 +133,19 @@ export async function POST(
     const body = await req.json();
     const currentUser = await getAuthenticatedUserFromCookies();
 
-    const { name, email, phone, rsvpStatus, rsvpNote, inviteToken } = body as {
+    const { name, email, phone, rsvpStatus, rsvpNote, inviteToken, invitationKey } = body as {
       name?: string;
       email?: string;
       phone?: string;
       rsvpStatus?: RsvpStatus;
       rsvpNote?: string;
       inviteToken?: string;
+      invitationKey?: string;
     };
 
     const result = await submitGuestRsvp({
       weddingSlugOrId: params.slug,
+      invitationKey,
       inviteToken,
       name: name || "",
       email,
