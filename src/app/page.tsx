@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import DateInput from "@/components/DateInput";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { groupHostedEvents } from "@/lib/event-status";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import {
@@ -38,6 +40,8 @@ export default function HomePage() {
   } = useAuth();
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [eventType, setEventType] = useState("Wedding");
+  const [otherEventType, setOtherEventType] = useState("");
   const [coupleNames, setCoupleNames] = useState("");
   const [eventTitle, setEventTitle] = useState("");
   const [date, setDate] = useState("");
@@ -50,8 +54,29 @@ export default function HomePage() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState<string | null | undefined>(undefined);
+  const [photoReading, setPhotoReading] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user && !editingProfile) { setProfileName(user.name); setProfilePhone(user.phone || ""); }
+  }, [user, editingProfile]);
+  const eventGroups = groupHostedEvents(hostedWeddings);
+  async function choosePhoto(file?: File) {
+    if (!file) return;
+    setPhotoReading(true); setProfileError(null);
+    try {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) throw new Error("Choose a JPG, PNG or WebP photo under 10 MB.");
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement("canvas"); canvas.width = 320; canvas.height = 320;
+      const context = canvas.getContext("2d"); if (!context) throw new Error("Could not prepare this photo.");
+      const side = Math.min(bitmap.width, bitmap.height);
+      context.drawImage(bitmap, (bitmap.width-side)/2, (bitmap.height-side)/2, side, side, 0, 0, 320, 320);
+      bitmap.close(); setProfilePhoto(canvas.toDataURL("image/jpeg", 0.85));
+    } catch (error) { setProfileError(error instanceof Error ? error.message : "Could not read this photo."); }
+    finally {setPhotoReading(false);}
+  }
 
   const handleCreateWedding = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,12 +87,12 @@ export default function HomePage() {
       const endObj = new Date(endDate);
       if (isNaN(startObj.getTime()) || isNaN(endObj.getTime())) {
         throw new Error(
-          "Please select both start (From) and end (To) date and time."
+          "Please select both start (From) and end (To) date."
         );
       }
       if (endObj.getTime() < startObj.getTime()) {
         throw new Error(
-          "The end date and time (To) must be after the start date and time (From)."
+          "The end date (To) must be on or after the start date (From)."
         );
       }
 
@@ -79,6 +104,8 @@ export default function HomePage() {
           ...encodeUserHintHeader(user),
         },
         body: JSON.stringify({
+          eventType,
+          otherEventType,
           coupleNames,
           eventTitle,
           date: startObj.toISOString(),
@@ -88,14 +115,15 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Failed to create wedding");
+        throw new Error(data.error || "Failed to create event");
       }
       await refreshAuth();
       setCreateModalOpen(false);
+      sessionStorage.setItem(`memorica-created-${data.wedding.id}`, "true");
       router.push(`/host/weddings/${data.wedding.id}`);
     } catch (err) {
       setCreateError(
-        err instanceof Error ? err.message : "Could not create wedding"
+        err instanceof Error ? err.message : "Could not create event"
       );
     } finally {
       setCreating(false);
@@ -115,6 +143,7 @@ export default function HomePage() {
           ...encodeUserHintHeader(user),
         },
         body: JSON.stringify({
+          profilePhoto,
           name: profileName,
           phone: profilePhone,
           onboardingCompleted: true,
@@ -152,13 +181,13 @@ export default function HomePage() {
           <div className="relative z-10 max-w-2xl space-y-5">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1 text-xs font-medium backdrop-blur-sm border border-white/20">
               <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-              <span>Digital Wedding Invitations & Live Guest Updates</span>
+              <span>Event Invitations & Live Guest Updates</span>
             </div>
             <h1 className="font-serif text-3xl sm:text-5xl font-bold tracking-tight leading-tight">
-              A shared digital home for your wedding celebration.
+              A shared home for every memorable event.
             </h1>
             <p className="text-sm sm:text-base text-rose-100 leading-relaxed">
-              Create your wedding event, build your guest list from your
+              Create your event, build your guest list from your
               contacts, share personalized invitations, collect RSVPs effortlessly,
               and publish real-time event updates exclusively for your verified
               guests.
@@ -169,7 +198,7 @@ export default function HomePage() {
                 type="button"
                 onClick={() =>
                   openAuthModal({
-                    title: "Create Your Wedding or Sign In",
+                    title: "Create an Event or Sign In",
                     subtitle:
                       "Verify your email or phone to start hosting or view your invitations.",
                   })
@@ -185,7 +214,7 @@ export default function HomePage() {
                   openAuthModal({
                     title: "Guest Sign In",
                     subtitle:
-                      "Verify the email or phone number from your wedding invitation to view live event updates.",
+                      "Verify the email or phone number from your event invitation to view live event updates.",
                   })
                 }
                 className="inline-flex items-center gap-2 rounded-xl bg-white/15 border border-white/30 px-5 py-3 text-sm font-semibold text-white hover:bg-white/25 transition"
@@ -220,7 +249,7 @@ export default function HomePage() {
               Frictionless Invitations & RSVPs
             </h2>
             <p className="text-xs text-stone-600 leading-relaxed">
-              Share your wedding link or personalized guest links via WhatsApp,
+              Share your event link or personalized guest links via WhatsApp,
               SMS, or email. Guests can open the invitation and submit their
               RSVP (Yes, No, or Maybe) immediately without creating an account
               first.
@@ -237,7 +266,7 @@ export default function HomePage() {
             <p className="text-xs text-stone-600 leading-relaxed">
               Publish live schedule announcements, shuttle timings, and venue
               notes. Server-enforced access control ensures only verified guests
-              of your wedding can view private updates.
+              of your event can view private updates.
             </p>
           </div>
         </section>
@@ -254,14 +283,14 @@ export default function HomePage() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
-                Account Onboarding & Profile Verification
+                {user.onboardingCompleted ? "Your account" : "Account Onboarding & Profile Verification"}
               </span>
               <h2 className="font-serif text-xl font-bold text-stone-900 mt-0.5">
-                Complete Your Host & Guest Profile
+                {user.onboardingCompleted ? "Edit your profile" : "Complete Your Host & Guest Profile"}
               </h2>
               <p className="text-xs text-stone-600">
                 Confirm your display name and optional phone number so your
-                hosted weddings and any guest invitations link automatically.
+                hosted events and any guest invitations link automatically.
               </p>
             </div>
             {user.onboardingCompleted && (
@@ -285,6 +314,16 @@ export default function HomePage() {
             onSubmit={handleSaveProfile}
             className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end"
           >
+            <div className="sm:col-span-3 flex flex-wrap items-center gap-4">
+              <div className="h-20 w-20 overflow-hidden rounded-full bg-rose-100 flex items-center justify-center text-2xl font-bold text-rose-800">
+                {(profilePhoto === undefined ? user.avatarUrl : profilePhoto) ? <img src={(profilePhoto === undefined ? user.avatarUrl : profilePhoto)!} alt="Profile photo preview" className="h-full w-full object-cover" /> : user.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold">Profile picture<input type="file" accept="image/jpeg,image/png,image/webp" disabled={photoReading || profileSaving} onChange={e=>{void choosePhoto(e.target.files?.[0]); e.target.value="";}} className="block mt-2 text-xs"/></label>
+                <p className="text-xs text-stone-500">JPG, PNG or WebP · up to 10 MB · cropped to a square</p>
+                <button type="button" onClick={()=>setProfilePhoto(null)} className="text-xs text-rose-700 underline">Remove photo</button>
+              </div>
+            </div>
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
                 Your Full Name *
@@ -312,10 +351,10 @@ export default function HomePage() {
             </div>
             <button
               type="submit"
-              disabled={profileSaving}
+              disabled={profileSaving || photoReading}
               className="rounded-xl bg-rose-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-800 disabled:opacity-50 transition"
             >
-              {profileSaving ? "Saving..." : "Save & Complete Onboarding"}
+              {profileSaving ? "Saving..." : user.onboardingCompleted ? "Save profile" : "Save & Complete Onboarding"}
             </button>
           </form>
         </div>
@@ -326,7 +365,7 @@ export default function HomePage() {
         <div className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-800 font-bold text-base">
-              {user.name.charAt(0).toUpperCase()}
+              {user.avatarUrl ? <img src={user.avatarUrl} alt={`${user.name} profile photo`} className="h-full w-full rounded-2xl object-cover" /> : user.name.charAt(0).toUpperCase()}
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -353,6 +392,8 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => {
+              setProfilePhoto(undefined);
+              setProfileError(null);
               setProfileName(user.name);
               setProfilePhone(user.phone || "");
               setEditingProfile(true);
@@ -364,60 +405,57 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Hosted Weddings Section */}
-      <section className="space-y-4">
+      {/* Hosted events grouped by their inclusive calendar date range. */}
+      {eventGroups.map(group => <section key={group.id} className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="font-serif text-2xl font-bold text-stone-900 flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-rose-700" />
-              Weddings You Host
+              {group.title}
             </h2>
             <p className="text-xs text-stone-500">
-              Create and manage your wedding details, guest list, invitations,
-              and live updates.
+              {group.description}
             </p>
           </div>
-          {hostedWeddings.length > 0 && (
+          {group.id === "ongoing" && group.events.length > 0 && (
             <button
               type="button"
               onClick={() => setCreateModalOpen(true)}
               className="inline-flex items-center gap-1.5 self-start rounded-xl bg-rose-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-800 transition"
             >
               <Plus className="h-4 w-4" />
-              Create Wedding Event
+              Create an Event
             </button>
           )}
         </div>
 
-        {hostedWeddings.length === 0 ? (
+        {group.events.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-10 text-center space-y-3">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-700">
               <Heart className="h-6 w-6" />
             </div>
             <div className="max-w-md mx-auto space-y-1">
               <h3 className="text-base font-bold text-stone-900">
-                Create your first wedding event
+                {group.id === "ongoing" ? "No ongoing event right now" : group.id === "upcoming" ? "No upcoming events" : "Your event history starts here"}
               </h3>
               <p className="text-xs text-stone-500 leading-relaxed">
-                Set up your wedding details, build or import your guest list,
-                share personalized invitation links, and publish real-time
-                updates for your guests.
+                {group.id === "past" ? "Events appear here after their end date, with guest lists and memories available to revisit." : "Create an event, complete its details, and invite your contacts to join."}
               </p>
             </div>
-            <div className="pt-2">
+            {group.id === "ongoing" && <div className="pt-2">
               <button
                 type="button"
                 onClick={() => setCreateModalOpen(true)}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-rose-700 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-800 transition"
               >
                 <Plus className="h-4 w-4" />
-                Create Wedding Event
+                Create an Event
               </button>
-            </div>
+            </div>}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
-            {hostedWeddings.map((w) => (
+            {group.events.map((w) => (
               <div
                 key={w.id}
                 className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6 shadow-sm hover:border-rose-300 transition space-y-5"
@@ -436,7 +474,7 @@ export default function HomePage() {
                       )}
                     </div>
                     <h3 className="font-serif text-2xl font-bold text-stone-900">
-                      {w.coupleNames} — {w.eventTitle}
+                      {w.eventType === "Wedding" ? `${w.coupleNames} — ${w.eventTitle}` : w.eventTitle}
                     </h3>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600 pt-1">
                       <span className="flex items-center gap-1.5">
@@ -524,14 +562,14 @@ export default function HomePage() {
             ))}
           </div>
         )}
-      </section>
+      </section>)}
 
       {/* Invited Weddings Section */}
       <section className="space-y-4">
         <div>
           <h2 className="font-serif text-2xl font-bold text-stone-900 flex items-center gap-2">
             <Bell className="h-5 w-5 text-amber-600" />
-            Weddings You Are Invited To
+            Events You Are Invited To
           </h2>
           <p className="text-xs text-stone-500">
             Events linked to your verified email or phone number.
@@ -541,11 +579,11 @@ export default function HomePage() {
         {invitedWeddings.length === 0 ? (
           <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center space-y-1.5">
             <p className="text-sm font-medium text-stone-700">
-              No wedding invitations are linked to your account yet.
+              No event invitations are linked to your account yet.
             </p>
             <p className="text-xs text-stone-500">
               When a wedding host adds your email or phone number to their guest
-              list—or when you open a shared wedding invitation link and verify
+              list—or when you open a shared event invitation link and verify
               your account—it will appear here automatically.
             </p>
           </div>
@@ -579,7 +617,7 @@ export default function HomePage() {
                     </span>
                   </div>
                   <h3 className="font-serif text-xl font-bold text-stone-900">
-                    {w.coupleNames} — {w.eventTitle}
+                    {w.eventType === "Wedding" ? `${w.coupleNames} — ${w.eventTitle}` : w.eventTitle}
                   </h3>
                   <p className="text-xs text-stone-600 flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5 text-rose-700 shrink-0" />
@@ -616,14 +654,14 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* Create Wedding Modal */}
+      {/* Create Event Modal */}
       {createModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-stone-200 space-y-4 overflow-hidden">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <div>
                 <h3 className="font-serif text-xl font-bold text-stone-900">
-                  Create a Wedding Event
+                  Create an Event
                 </h3>
                 <p className="text-xs text-stone-500">
                   Enter your celebration schedule and venue details
@@ -645,19 +683,26 @@ export default function HomePage() {
             )}
 
             <form onSubmit={handleCreateWedding} className="space-y-3.5">
-              <div>
+              <label className="block text-xs font-semibold text-stone-700">Event Type *
+                <select value={eventType} onChange={e => setEventType(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-300 p-3 bg-white">
+                  {["Office outing", "Conference meeting", "Wedding", "Other"].map(type => <option key={type}>{type}</option>)}
+                </select>
+              </label>
+              {eventType === "Other" && <label className="block text-xs font-semibold">Name your event type *<input required value={otherEventType} onChange={e => setOtherEventType(e.target.value)} className="mt-1 w-full rounded-xl border p-3" /></label>}
+              <p className="text-xs text-stone-500">Step 1 of 2 · Create your event, then complete its details and invitation.</p>
+              {eventType === "Wedding" && <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Couple Names *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Arjun & Meera"
+                  placeholder={eventType === "Wedding" ? "e.g. Arjun & Meera" : "Organizer name"}
                   value={coupleNames}
                   onChange={(e) => setCoupleNames(e.target.value)}
                   className="w-full rounded-xl border border-stone-300 px-3.5 py-2 text-sm focus:border-rose-600 focus:outline-none"
                 />
-              </div>
+              </div>}
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Event Title *
@@ -675,10 +720,10 @@ export default function HomePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    From (Start Date & Time) *
+                    From (Start Date) *
                   </label>
-                  <input
-                    type="datetime-local"
+                  <DateInput
+                    type="date"
                     required
                     value={date}
                     onChange={(e) => {
@@ -693,10 +738,10 @@ export default function HomePage() {
                 </div>
                 <div className="min-w-0">
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    To (End Date & Time) *
+                    To (End Date) *
                   </label>
-                  <input
-                    type="datetime-local"
+                  <DateInput
+                    type="date"
                     required
                     min={date || undefined}
                     value={endDate}
@@ -733,7 +778,7 @@ export default function HomePage() {
                   disabled={creating}
                   className="rounded-xl bg-rose-700 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-rose-800 disabled:opacity-50"
                 >
-                  {creating ? "Creating..." : "Create Wedding"}
+                  {creating ? "Creating..." : "Create Event"}
                 </button>
               </div>
             </form>

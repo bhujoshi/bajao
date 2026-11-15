@@ -167,7 +167,7 @@ export default function GuestEventUpdatesPage() {
               href="/"
               className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 transition"
             >
-              Back to My Weddings
+              Back to My Events
             </Link>
           </div>
         </div>

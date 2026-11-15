@@ -1,3 +1,4 @@
+import { missingEventDetails, invitationOptions } from "@/lib/event-setup";
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUserFromCookies } from "@/lib/auth";
 import {
@@ -61,6 +62,8 @@ export async function POST(
       { status: 403 }
     );
   }
+
+  if (missingEventDetails(access.wedding).length) return NextResponse.json({ error: "Complete the event details and invitation before inviting contacts." }, { status: 400 });
 
   try {
     const body = await req.json();
@@ -158,6 +161,7 @@ export async function POST(
       source,
       candidates,
       skipDuplicates: body.skipDuplicates !== false,
+      invitationKey: body.invitationKey,
     });
 
     const rows = await prisma.guest.findMany({
@@ -192,11 +196,14 @@ export async function PATCH(
     );
   }
 
+  if (missingEventDetails(access.wedding).length) return NextResponse.json({ error: "Complete the event details and invitation before inviting contacts." }, { status: 400 });
+
   try {
     const body = await req.json();
     const weddingId = access.wedding.id;
 
     if (body.action === "mark_shared") {
+      if (!invitationOptions(access.wedding).some(option => option.key === body.invitationKey)) return NextResponse.json({error:"Select an available invitation card."},{status:400});
       const { guestId, channel } = body as {
         guestId?: string;
         channel?: string;
@@ -206,10 +213,11 @@ export async function PATCH(
         const guest = await prisma.guest.findFirst({
           where: { id: guestId, weddingId },
         });
-        if (guest && guest.invitationStatus === "not_shared") {
+        if (!guest) return NextResponse.json({error:"Guest not found."},{status:404});
+        if (guest) {
           await prisma.guest.update({
             where: { id: guest.id },
-            data: { invitationStatus: "link_shared" },
+            data: { invitationKey: body.invitationKey, ...(guest.invitationStatus === "not_shared" ? {invitationStatus: "link_shared"} : {}) },
           });
         }
       }

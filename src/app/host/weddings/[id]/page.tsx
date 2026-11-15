@@ -1,5 +1,10 @@
 "use client";
+import EventCreatedCelebration from "@/components/EventCreatedCelebration";
+import EventSetupForm, { MediaPreview } from "@/components/EventSetupForm";
+import { missingEventDetails, invitationOptions } from "@/lib/event-setup";
 
+
+import DateInput from "@/components/DateInput";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -11,7 +16,7 @@ import {
   UpdateCategory,
   WeddingDTO,
   encodeUserHintHeader,
-  formatDateTimeStamp,
+  formatWeddingDate,
   formatWeddingDateRange,
 } from "@/lib/types";
 import {
@@ -43,7 +48,7 @@ import {
   X,
 } from "lucide-react";
 
-type HostTab = "guests" | "share" | "updates" | "overview" | "analytics";
+type HostTab = "setup" | "guests" | "share" | "updates" | "overview" | "analytics";
 
 interface ImportPreviewItem {
   tempId: string;
@@ -61,7 +66,7 @@ export default function HostWeddingWorkspacePage() {
   const router = useRouter();
   const { user, openAuthModal, refreshAuth } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<HostTab>("guests");
+  const [activeTab, setActiveTab] = useState<HostTab>("setup");
   const [wedding, setWedding] = useState<WeddingDTO | null>(null);
   const [guests, setGuests] = useState<GuestDTO[]>([]);
   const [updates, setUpdates] = useState<EventUpdateDTO[]>([]);
@@ -98,6 +103,9 @@ export default function HostWeddingWorkspacePage() {
   const [manualName, setManualName] = useState("");
   const [manualEmail, setManualEmail] = useState("");
   const [manualPhone, setManualPhone] = useState("");
+  const [guestInvitationKey, setGuestInvitationKey] = useState("");
+  const [shareRequest, setShareRequest] = useState<{guest?: GuestDTO; mode: "copy" | "web_share" | "whatsapp"} | null>(null);
+  const [shareInvitationKey, setShareInvitationKey] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const manualNameInputRef = useRef<HTMLInputElement>(null);
 
@@ -165,11 +173,11 @@ export default function HostWeddingWorkspacePage() {
 
       setEditCoupleNames(data.wedding.coupleNames);
       setEditEventTitle(data.wedding.eventTitle);
-      setEditDate(new Date(data.wedding.date).toISOString().slice(0, 16));
+      setEditDate(new Date(data.wedding.date).toISOString().slice(0, 10));
       setEditEndDate(
         data.wedding.endDate
-          ? new Date(data.wedding.endDate).toISOString().slice(0, 16)
-          : new Date(data.wedding.date).toISOString().slice(0, 16)
+          ? new Date(data.wedding.endDate).toISOString().slice(0, 10)
+          : new Date(data.wedding.date).toISOString().slice(0, 10)
       );
       setEditVenue(data.wedding.venue);
       setEditDescription(data.wedding.description || "");
@@ -193,12 +201,12 @@ export default function HostWeddingWorkspacePage() {
       const endObj = new Date(editEndDate);
       if (isNaN(startObj.getTime()) || isNaN(endObj.getTime())) {
         throw new Error(
-          "Please provide both start (From) and end (To) date and time."
+          "Please provide both start (From) and end (To) date."
         );
       }
       if (endObj.getTime() < startObj.getTime()) {
         throw new Error(
-          "The end date and time (To) must be after the start date and time (From)."
+          "The end date (To) must be on or after the start date (From)."
         );
       }
 
@@ -267,12 +275,14 @@ export default function HostWeddingWorkspacePage() {
   const handleAddManualGuest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!wedding) return;
+    if (!invitationOptions(wedding).some(o => o.key === guestInvitationKey)) { showToast("error", "Choose an invitation card first."); return; }
     setAddingGuest(true);
     try {
       const res = await fetch(`/api/weddings/${wedding.id}/guests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          invitationKey: guestInvitationKey,
           source: "manual",
           skipDuplicates: false,
           candidates: [
@@ -481,12 +491,14 @@ export default function HostWeddingWorkspacePage() {
       return;
     }
 
+    if (!invitationOptions(wedding).some(o => o.key === guestInvitationKey)) { showToast("error", "Choose an invitation card first."); return; }
     setConfirmingImport(true);
     try {
       const res = await fetch(`/api/weddings/${wedding.id}/guests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          invitationKey: guestInvitationKey,
           source: importSource,
           skipDuplicates: false,
           candidates: selected.map((s) => ({
@@ -516,24 +528,30 @@ export default function HostWeddingWorkspacePage() {
     }
   };
 
-  const handleShareInvite = async (opts: {
+  const handleShareInvite = (opts: {guest?: GuestDTO; mode: "copy" | "web_share" | "whatsapp"}) => {
+    setShareInvitationKey(opts.guest?.invitationKey || "");
+    setShareRequest(opts);
+  };
+  const executeShareInvite = async (opts: {
     guest?: GuestDTO;
     mode: "copy" | "web_share" | "whatsapp";
   }) => {
     if (!wedding) return;
-    const origin = window.location.origin;
-    const url = opts.guest
-      ? `${origin}/invite/${wedding.slug}?guest=${opts.guest.inviteToken}`
-      : `${origin}/invite/${wedding.slug}`;
+    if (missingEventDetails(wedding).length) { showToast("error", "Complete event details before inviting contacts."); return; }
+    const choice = invitationOptions(wedding).find(o => o.key === shareInvitationKey);
+    if (!choice) { showToast("error", "Choose an invitation card first."); return; }
+    const query = new URLSearchParams({invitation: choice.key});
+    if (opts.guest) query.set("guest", opts.guest.inviteToken);
+    const url = `${window.location.origin}/invite/${wedding.slug}?${query}`;
 
     const shareText = opts.guest
-      ? `Hi ${opts.guest.name}, you are warmly invited to ${wedding.coupleNames}'s wedding (${wedding.eventTitle})! View the invitation and RSVP here: ${url}`
-      : `You are warmly invited to ${wedding.coupleNames}'s wedding (${wedding.eventTitle})! View the invitation and RSVP here: ${url}`;
+      ? `Hi ${opts.guest.name}, you are warmly invited to ${choice.title}! View the invitation and RSVP here: ${url}`
+      : `You are warmly invited to ${choice.title}! View the invitation and RSVP here: ${url}`;
 
     if (opts.mode === "web_share" && navigator.share) {
       try {
         await navigator.share({
-          title: `${wedding.coupleNames} — Wedding Invitation`,
+          title: `${choice.title} — Invitation`,
           text: shareText,
           url,
         });
@@ -558,17 +576,19 @@ export default function HostWeddingWorkspacePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "mark_shared",
+        invitationKey: choice.key,
         guestId: opts.guest?.id,
         channel: opts.mode,
       }),
     });
 
+    setShareRequest(null);
     await loadWorkspace();
     showToast(
       "info",
       opts.guest
         ? `Invitation link copied for ${opts.guest.name}.`
-        : "Wedding invitation link copied to clipboard."
+        : "Invitation link ready to share."
     );
   };
 
@@ -792,6 +812,7 @@ export default function HostWeddingWorkspacePage() {
         </div>
       )}
 
+      <EventCreatedCelebration eventId={wedding.id} />
       {/* Header Banner */}
       <div className="rounded-3xl bg-white border border-stone-200 p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -799,14 +820,14 @@ export default function HostWeddingWorkspacePage() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-[11px] font-semibold text-rose-800">
                 <Sparkles className="h-3 w-3" />
-                Host Dashboard
+                {wedding.eventType === "Other" ? wedding.otherEventType : wedding.eventType} · Host Dashboard
               </span>
               <span className="text-xs text-stone-400 font-mono">
                 /invite/{wedding.slug}
               </span>
             </div>
             <h1 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900">
-              {wedding.coupleNames} — {wedding.eventTitle}
+              {wedding.eventType === "Wedding" ? `${wedding.coupleNames} — ${wedding.eventTitle}` : wedding.eventTitle}
             </h1>
             <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600">
               <span className="flex items-center gap-1.5">
@@ -823,7 +844,7 @@ export default function HostWeddingWorkspacePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Link
+            {missingEventDetails(wedding).length === 0 && <><Link
               href={`/invite/${wedding.slug}`}
               className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2 text-xs font-semibold text-stone-800 hover:bg-stone-100 transition"
             >
@@ -836,7 +857,7 @@ export default function HostWeddingWorkspacePage() {
             >
               Guest Updates Feed
               <Bell className="h-3.5 w-3.5 text-rose-700" />
-            </Link>
+            </Link></>}
           </div>
         </div>
 
@@ -881,16 +902,17 @@ export default function HostWeddingWorkspacePage() {
 
         <div className="flex overflow-x-auto gap-1.5 pt-2 border-t border-stone-100 no-scrollbar">
           {[
-            {
-              id: "guests" as HostTab,
-              label: `Guest List (${guests.length})`,
-              icon: Users,
-              badge: conflictGuests.length > 0 ? conflictGuests.length : null,
-            },
+            { id: "setup" as HostTab, label: "Complete Event Details", icon: Edit3, badge: null },
             {
               id: "share" as HostTab,
               label: "Invitation Card & Share",
               icon: Share2,
+            },
+            {
+              id: "guests" as HostTab,
+              label: `Invite Contacts (${guests.length})`,
+              icon: Users,
+              badge: conflictGuests.length > 0 ? conflictGuests.length : null,
             },
             {
               id: "updates" as HostTab,
@@ -907,7 +929,7 @@ export default function HostWeddingWorkspacePage() {
               label: "Insights & Activity",
               icon: BarChart3,
             },
-          ].map((t) => {
+          ].filter(t => !missingEventDetails(wedding).length || ["setup", "share", "overview"].includes(t.id)).map((t) => {
             const Icon = t.icon;
             const active = activeTab === t.id;
             return (
@@ -940,8 +962,10 @@ export default function HostWeddingWorkspacePage() {
         </div>
       </div>
 
+      {activeTab === "setup" && <EventSetupForm key={wedding.id} wedding={wedding} onNext={() => setActiveTab("share")} onInvite={() => setActiveTab("guests")} onSaved={updated => {setWedding(updated); setEditDescription(updated.description || "");}} />}
+      {activeTab !== "setup" && missingEventDetails(wedding).length > 0 && <div className="rounded-2xl bg-amber-50 border border-amber-200 p-5 text-sm">Complete the event details, invitation message and card, and couple photos before inviting contacts. <button onClick={()=>setActiveTab("setup")} className="underline font-semibold">Complete event details</button></div>}
       {/* TAB 1: GUEST LIST & CONTACT IMPORT */}
-      {activeTab === "guests" && (
+      {activeTab === "guests" && !missingEventDetails(wedding).length && (
         <div className="space-y-6">
           {conflictGuests.length > 0 && (
             <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/90 p-5 space-y-4 shadow-sm">
@@ -1136,7 +1160,7 @@ export default function HostWeddingWorkspacePage() {
                 </div>
               </div>
 
-              <form onSubmit={handleAddManualGuest} className="space-y-3">
+              <form onSubmit={handleAddManualGuest} className="space-y-3"><label className="block text-sm font-medium">Invitation for these contacts<select required className="mt-2 w-full rounded-xl border border-stone-300 p-3 bg-white" value={guestInvitationKey} onChange={e => setGuestInvitationKey(e.target.value)}><option value="">Choose an event invitation</option>{invitationOptions(wedding).map(o => <option key={o.key} value={o.key}>{o.title}</option>)}</select></label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-stone-700 mb-1">
@@ -1218,7 +1242,7 @@ export default function HostWeddingWorkspacePage() {
                   </button>
                 </div>
 
-                <div className="overflow-y-auto flex-1 space-y-2 pr-1">
+                <label className="block text-sm font-medium">Invitation for these contacts<select required className="mt-2 w-full rounded-xl border border-stone-300 p-3 bg-white" value={guestInvitationKey} onChange={e => setGuestInvitationKey(e.target.value)}><option value="">Choose an event invitation</option>{invitationOptions(wedding).map(o => <option key={o.key} value={o.key}>{o.title}</option>)}</select></label><div className="overflow-y-auto flex-1 space-y-2 pr-1">
                   {importPreview.map((item, idx) => (
                     <label
                       key={item.tempId}
@@ -1484,184 +1508,20 @@ export default function HostWeddingWorkspacePage() {
       )}
 
       {/* TAB 2: INVITATION MESSAGE / CARD & SHARE INVITATIONS */}
-      {activeTab === "share" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Separate Invitation Message / Card Builder */}
-            <div className="lg:col-span-6 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm space-y-4">
-              <div className="space-y-1">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
-                  Invitation Message & Card
-                </span>
-                <h2 className="font-serif text-xl font-bold text-stone-900">
-                  Customize Your Invitation Message
-                </h2>
-                <p className="text-xs text-stone-600">
-                  Compose the welcome note, family blessings, dress code, or
-                  arrival details that will appear on your wedding invitation
-                  card.
-                </p>
-              </div>
-
-              <form
-                onSubmit={handleSaveInvitationCardMessage}
-                className="space-y-4"
-              >
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Invitation Message / Welcome Note
-                  </label>
-                  <textarea
-                    rows={5}
-                    placeholder="Together with our families, we joyfully invite you to celebrate our wedding. Dress code: Traditional Indian / Formal..."
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm focus:border-rose-600 focus:outline-none"
-                  />
-                </div>
-                <div className="flex items-center justify-end">
-                  <button
-                    type="submit"
-                    disabled={savingCardMessage}
-                    className="rounded-xl bg-rose-700 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-rose-800 disabled:opacity-50 transition"
-                  >
-                    {savingCardMessage
-                      ? "Saving Invitation Card..."
-                      : "Save Invitation Message"}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Live Invitation Card Preview */}
-            <div className="lg:col-span-6 overflow-hidden rounded-3xl border border-rose-200 bg-white shadow-md flex flex-col">
-              <div className="bg-royal-header px-6 py-7 text-center text-white space-y-2">
-                <div className="inline-flex items-center gap-1 rounded-full bg-white/15 border border-white/25 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-amber-200">
-                  <Sparkles className="h-3 w-3" />
-                  Invitation Card Preview
-                </div>
-                <h3 className="font-serif text-2xl sm:text-3xl font-bold">
-                  {wedding.coupleNames}
-                </h3>
-                <p className="font-serif text-sm text-rose-100 italic">
-                  {wedding.eventTitle}
-                </p>
-              </div>
-
-              <div className="p-5 sm:p-6 space-y-4 flex-1 flex flex-col justify-between">
-                {editDescription.trim() ? (
-                  <p className="text-center font-serif text-sm text-stone-700 italic leading-relaxed">
-                    &ldquo;{editDescription.trim()}&rdquo;
-                  </p>
-                ) : (
-                  <p className="text-center text-xs text-stone-400 italic">
-                    Add an invitation message on the left to display a personal
-                    welcome note on your card.
-                  </p>
-                )}
-
-                <div className="space-y-2.5 pt-2 border-t border-stone-100 text-xs">
-                  <div className="flex items-start gap-2.5 text-stone-700">
-                    <Calendar className="h-4 w-4 text-rose-700 shrink-0 mt-0.5" />
-                    <div>
-                      <div>
-                        <strong className="text-stone-900">From:</strong>{" "}
-                        {formatDateTimeStamp(wedding.date)}
-                      </div>
-                      {wedding.endDate && (
-                        <div>
-                          <strong className="text-stone-900">To:</strong>{" "}
-                          {formatDateTimeStamp(wedding.endDate)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2.5 text-stone-700">
-                    <MapPin className="h-4 w-4 text-rose-700 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="text-stone-900">Venue:</strong>{" "}
-                      {wedding.venue}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm space-y-5">
-            <div className="space-y-1">
-              <h2 className="font-serif text-xl font-bold text-stone-900">
-                Share Your Wedding Invitation
-              </h2>
-              <p className="text-xs text-stone-600">
-                Share your wedding invitation link via WhatsApp, SMS, email, or
-                your device&apos;s share menu. Guests can open the invitation
-                and submit their RSVP immediately without creating an account
-                first.
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-stone-50 border border-stone-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-0.5 overflow-hidden">
-                <div className="text-[11px] font-semibold text-stone-500">
-                  Wedding Invitation Link
-                </div>
-                <div className="text-sm font-mono font-semibold text-rose-800 truncate">
-                  {typeof window !== "undefined"
-                    ? `${window.location.origin}/invite/${wedding.slug}`
-                    : `/invite/${wedding.slug}`}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleShareInvite({ mode: "copy" })}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-rose-700 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-800 transition"
-                >
-                  {copiedId === "general" ? (
-                    <>
-                      <Check className="h-4 w-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copy Link
-                    </>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShareInvite({ mode: "web_share" })}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-xs font-semibold text-stone-800 hover:bg-stone-100 transition"
-                >
-                  <Share2 className="h-4 w-4 text-rose-700" />
-                  Share via Device
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShareInvite({ mode: "whatsapp" })}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition"
-                >
-                  WhatsApp
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
-              <AlertCircle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
-              <div>
-                <strong>Delivery Status Note:</strong> Copying or sharing an
-                invitation link marks the guest as{" "}
-                <em>&ldquo;Link Shared (Delivery Unconfirmed)&rdquo;</em>. Their
-                status updates to <em>&ldquo;Invitation Opened&rdquo;</em> or{" "}
-                <em>&ldquo;RSVP Submitted&rdquo;</em> only when they open the
-                link or respond.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === "share" && <div className="space-y-6">
+        <EventSetupForm mode="invitations" wedding={wedding} onSaved={updated => {setWedding(updated); setEditDescription(updated.description || "");}} onInvite={() => setActiveTab("guests")} />
+        {!missingEventDetails(wedding).length && <section className="rounded-2xl bg-white border p-6"><h2 className="font-semibold mb-4">Share your invitation</h2><div className="flex flex-wrap gap-3">
+          <button className="rounded-xl bg-rose-700 text-white px-4 py-3" onClick={() => handleShareInvite({mode:"copy"})}>Choose card & copy link</button>
+          <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"web_share"})}>Share invitation</button>
+          <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"whatsapp"})}>WhatsApp</button>
+        </div></section>}
+      </div>}
+      {shareRequest && <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Choose invitation card"><div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-auto space-y-4">
+        <h2 className="text-xl font-semibold">Which invitation would you like to share?</h2>
+        <label className="block">Event invitation<select className="mt-2 w-full rounded-xl border p-3" value={shareInvitationKey} onChange={e => setShareInvitationKey(e.target.value)}><option value="">Choose an event or sub-event</option>{invitationOptions(wedding).map(o => <option key={o.key} value={o.key}>{o.title}</option>)}</select></label>
+        {invitationOptions(wedding).filter(o => o.key === shareInvitationKey).map(o => <MediaPreview key={o.key} asset={o.card} />)}
+        <div className="flex gap-3"><button className="border rounded-xl px-4 py-2" onClick={() => setShareRequest(null)}>Cancel</button><button disabled={!invitationOptions(wedding).some(o => o.key === shareInvitationKey)} className="bg-rose-700 text-white rounded-xl px-4 py-2 disabled:opacity-50" onClick={() => executeShareInvite(shareRequest).catch(e => showToast("error", e.message || "Unable to share invitation"))}>Continue with selected invitation</button></div>
+      </div></div>}
 
       {/* TAB 3: LIVE EVENT UPDATES MANAGER */}
       {activeTab === "updates" && (
@@ -1862,7 +1722,7 @@ export default function HostWeddingWorkspacePage() {
         <div className="max-w-2xl rounded-2xl border border-stone-200 bg-white p-6 shadow-sm space-y-5">
           <div>
             <h2 className="font-serif text-xl font-bold text-stone-900">
-              Edit Wedding Details
+              Edit Event Details
             </h2>
             <p className="text-xs text-stone-500">
               Changes immediately update your public invitation page and guest
@@ -1898,10 +1758,10 @@ export default function HostWeddingWorkspacePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="min-w-0">
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  From (Start Date & Time) *
+                  From (Start Date) *
                 </label>
-                <input
-                  type="datetime-local"
+                <DateInput
+                  type="date"
                   required
                   value={editDate}
                   onChange={(e) => {
@@ -1916,10 +1776,10 @@ export default function HostWeddingWorkspacePage() {
               </div>
               <div className="min-w-0">
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  To (End Date & Time) *
+                  To (End Date) *
                 </label>
-                <input
-                  type="datetime-local"
+                <DateInput
+                  type="date"
                   required
                   min={editDate || undefined}
                   value={editEndDate}

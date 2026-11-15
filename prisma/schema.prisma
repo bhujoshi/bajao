@@ -13,6 +13,8 @@ model User {
   email               String?           @unique
   phone               String?           @unique
   googleSub           String?           @unique
+  avatarImage         Bytes?
+  avatarMime          String?
   avatarUrl           String?
   accountStatus       String            @default("verified") // "pending" | "verified"
   onboardingCompleted Boolean           @default(false)
@@ -52,6 +54,10 @@ model OtpVerification {
 
 model Wedding {
   id          String            @id @default(cuid())
+  eventType   String            @default("Wedding")
+  otherEventType String         @default("")
+  setupDetails String           @default("{}")
+  assets EventAsset[]
   slug        String            @unique
   ownerUserId String
   owner       User              @relation("WeddingOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
@@ -73,6 +79,7 @@ model Wedding {
 }
 
 model Guest {
+  invitationKey            String    @default("overall")
   id                       String    @id @default(cuid())
   weddingId                String
   wedding                  Wedding   @relation(fields: [weddingId], references: [id], onDelete: Cascade)
@@ -148,4 +155,14 @@ model AnalyticsEvent {
 
   @@index([weddingId, createdAt])
   @@index([eventType])
+}
+
+model EventAsset {
+  id String @id @default(cuid())
+  weddingId String
+  wedding Wedding @relation(fields: [weddingId], references: [id], onDelete: Cascade)
+  name String
+  mime String
+  data Bytes
+  @@index([weddingId])
 }

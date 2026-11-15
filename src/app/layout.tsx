@@ -4,9 +4,9 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { Navbar } from "@/components/Navbar";
 
 export const metadata: Metadata = {
-  title: "Wedding Memories — Digital Wedding Invitations & Live Updates",
+  title: "Memorica — Event Invitations & Live Updates",
   description:
-    "Create your wedding event, manage your guest list, share invitations, collect RSVPs, and publish live updates for your verified guests.",
+    "Create your event, manage your guest list, share invitations, collect RSVPs, and publish live updates for your verified guests.",
 };
 
 export default function RootLayout({
@@ -23,11 +23,11 @@ export default function RootLayout({
           <footer className="border-t border-stone-200/80 bg-white py-6 text-center text-xs text-stone-500">
             <div className="mx-auto max-w-6xl px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
               <span>
-                © {new Date().getFullYear()} Wedding Memories. All rights
+                © {new Date().getFullYear()} Memorica. All rights
                 reserved.
               </span>
               <span className="text-stone-400">
-                Digital Wedding Invitations & Live Guest Updates
+                Event Invitations & Live Guest Updates
               </span>
             </div>
           </footer>

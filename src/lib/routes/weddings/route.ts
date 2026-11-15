@@ -29,15 +29,17 @@ export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUserFromCookies();
   if (!user) {
     return NextResponse.json(
-      { error: "Please sign in to create a wedding event." },
+      { error: "Please sign in to create an event." },
       { status: 401 }
     );
   }
 
   try {
     const body = await req.json();
-    const { coupleNames, eventTitle, date, endDate, venue, description } =
+    const { eventType, otherEventType, coupleNames, eventTitle, date, endDate, venue, description } =
       body as {
+        eventType?: string;
+        otherEventType?: string;
         coupleNames?: string;
         eventTitle?: string;
         date?: string;
@@ -48,6 +50,8 @@ export async function POST(req: NextRequest) {
 
     const wedding = await createWedding({
       ownerUserId: user.id,
+      eventType,
+      otherEventType,
       coupleNames: coupleNames || "",
       eventTitle: eventTitle || "",
       date: date || "",
@@ -80,7 +84,7 @@ export async function POST(req: NextRequest) {
     return res;
   } catch (err) {
     const message =
-      err instanceof Error ? err.message : "Failed to create wedding.";
+      err instanceof Error ? err.message : "Failed to create event.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

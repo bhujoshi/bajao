@@ -1,5 +1,7 @@
 "use client";
 
+import { EventSetup } from "@/lib/event-setup";
+import { MediaPreview } from "@/components/EventSetupForm";
 import React, { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -7,7 +9,7 @@ import { useAuth } from "@/components/AuthProvider";
 import {
   RsvpStatus,
   encodeUserHintHeader,
-  formatDateTimeStamp,
+  formatWeddingDate,
 } from "@/lib/types";
 import {
   AlertTriangle,
@@ -24,6 +26,11 @@ import {
 } from "lucide-react";
 
 interface PublicWeddingData {
+  eventType: string;
+  setup: EventSetup;
+  selectedInvitationKey: string;
+  selectedInvitationTitle: string;
+  selectedCard: NonNullable<EventSetup["card"]>;
   id: string;
   slug: string;
   coupleNames: string;
@@ -50,6 +57,7 @@ function PublicWeddingInvitationContent() {
   const params = useParams<{ slug: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const invitationKeyParam = searchParams.get("invitation") || undefined;
   const guestTokenParam = searchParams.get("guest") || undefined;
 
   const { user, openAuthModal, refreshAuth } = useAuth();
@@ -87,9 +95,10 @@ function PublicWeddingInvitationContent() {
   const loadInvitation = useCallback(async () => {
     setLoading(true);
     try {
-      const query = guestTokenParam
-        ? `?guest=${encodeURIComponent(guestTokenParam)}`
-        : "";
+      const queryParams = new URLSearchParams();
+      if (guestTokenParam) queryParams.set("guest", guestTokenParam);
+      if (invitationKeyParam) queryParams.set("invitation", invitationKeyParam);
+      const query = `?${queryParams}`;
       const res = await fetch(`/api/invite/${params.slug}${query}`, {
         cache: "no-store",
         credentials: "same-origin",
@@ -127,7 +136,7 @@ function PublicWeddingInvitationContent() {
     } finally {
       setLoading(false);
     }
-  }, [params.slug, guestTokenParam, user]);
+  }, [params.slug, guestTokenParam, invitationKeyParam, user]);
 
   useEffect(() => {
     loadInvitation();
@@ -150,6 +159,7 @@ function PublicWeddingInvitationContent() {
           rsvpStatus,
           rsvpNote: rsvpNote || undefined,
           inviteToken: activeInviteToken,
+          invitationKey: wedding?.selectedInvitationKey,
         }),
       });
       const data = await res.json();
@@ -293,6 +303,16 @@ function PublicWeddingInvitationContent() {
           </div>
 
           <div className="p-6 sm:p-8 space-y-6">
+            {wedding.setup && <section className="space-y-5">
+              <h3 className="font-semibold text-lg mb-3">{wedding.selectedInvitationTitle}</h3><MediaPreview asset={wedding.selectedCard} />
+              {wedding.setup.subEvents.filter(event => wedding.selectedInvitationKey === "overall" || event.id === wedding.selectedInvitationKey).map(event => <div key={event.id} className="rounded-xl bg-stone-50 p-4 mt-4"><h4 className="font-semibold">{event.name}</h4><p className="text-sm">{event.from.replace("T", " ")} – {event.to.replace("T", " ")}</p><p className="text-sm whitespace-pre-wrap">{event.remarks}</p></div>)}
+              {wedding.eventType === "Wedding" && <div className="text-center text-sm text-stone-600 space-y-2">
+                <p>With the blessings of {wedding.setup.partnerOneMother} & {wedding.setup.partnerOneFather}</p>
+                <p>and {wedding.setup.partnerTwoMother} & {wedding.setup.partnerTwoFather}</p>
+                <p className="font-semibold text-rose-700">{wedding.setup.coupleHashtag} {wedding.setup.otherHashtags}</p>
+              </div>}
+              <div className="grid grid-cols-2 gap-3">{wedding.setup.photos.map(photo => <MediaPreview key={photo.id} asset={photo} />)}</div>
+            </section>}
             {wedding.description && (
               <p className="text-center font-serif text-sm sm:text-base text-stone-700 leading-relaxed italic max-w-lg mx-auto">
                 &ldquo;{wedding.description}&rdquo;
@@ -311,14 +331,14 @@ function PublicWeddingInvitationContent() {
                   <div className="text-xs sm:text-sm text-stone-900">
                     <span className="font-semibold text-stone-500">From: </span>
                     <span className="font-bold">
-                      {formatDateTimeStamp(wedding.date)}
+                      {formatWeddingDate(wedding.date)}
                     </span>
                   </div>
                   {wedding.endDate && (
                     <div className="text-xs sm:text-sm text-stone-900">
                       <span className="font-semibold text-stone-500">To: </span>
                       <span className="font-bold">
-                        {formatDateTimeStamp(wedding.endDate)}
+                        {formatWeddingDate(wedding.endDate)}
                       </span>
                     </div>
                   )}

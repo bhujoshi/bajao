@@ -23,10 +23,10 @@ export default function LoginPage() {
         </div>
         <div className="space-y-1.5">
           <h1 className="font-serif text-2xl font-bold text-stone-900">
-            Welcome to Wedding Memories
+            Welcome to Memorica
           </h1>
           <p className="text-xs text-stone-500 leading-relaxed">
-            Verify your email or phone number to manage your wedding event,
+            Verify your email or phone number to manage your event,
             track RSVPs, or view live updates for weddings you are invited to.
           </p>
         </div>

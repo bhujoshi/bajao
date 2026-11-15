@@ -1,3 +1,4 @@
+import * as media from "@/lib/routes/media/route";
 import { NextRequest, NextResponse } from "next/server";
 import * as authOtp from "@/lib/routes/auth/otp/route";
 import * as authSession from "@/lib/routes/auth/session/route";
@@ -17,6 +18,11 @@ async function dispatch(
   segments: string[]
 ) {
   const [p0, p1, p2] = segments;
+
+  if (p0 === "media" && p1 && segments.length === 2 && method === "GET") return media.read(p1);
+  if (p0 === "weddings" && p1 && p2 === "media" && segments.length === 3 && method === "POST") return media.upload(req, p1);
+
+  if (p0 === "auth" && p1 === "avatar" && segments.length === 2 && method === "GET") return authSession.avatar();
 
   // /api/auth/otp
   if (p0 === "auth" && p1 === "otp" && segments.length === 2) {

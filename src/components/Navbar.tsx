@@ -20,7 +20,7 @@ export function Navbar() {
               <Heart className="h-4 w-4 fill-current" />
             </div>
             <span className="font-serif text-lg font-bold tracking-tight text-stone-900">
-              Wedding Memories
+              Memorica
             </span>
           </Link>
 
@@ -34,7 +34,7 @@ export function Navbar() {
                     : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                 }`}
               >
-                My Weddings & Invitations
+                My Events & Invitations
               </Link>
             </nav>
           )}
@@ -45,7 +45,7 @@ export function Navbar() {
             <div className="flex items-center gap-2.5">
               <div className="flex items-center gap-2.5 rounded-xl border border-stone-200 bg-stone-50/70 px-3 py-1.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-800">
-                  {user.name.charAt(0).toUpperCase()}
+                  {user.avatarUrl ? <img src={user.avatarUrl} alt="Your profile" className="h-full w-full rounded-full object-cover" /> : user.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="leading-tight">
                   <div className="flex items-center gap-1 text-xs font-semibold text-stone-900">
@@ -87,7 +87,7 @@ export function Navbar() {
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="flex items-center gap-1.5 rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-semibold text-stone-800"
             >
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              {user.avatarUrl ? <img src={user.avatarUrl} alt="Your profile" className="h-6 w-6 rounded-full object-cover" /> : <span className="h-2 w-2 rounded-full bg-emerald-500" />}
               {user.name.split(" ")[0]}
               {mobileMenuOpen ? (
                 <X className="h-4 w-4 ml-1" />
@@ -122,7 +122,7 @@ export function Navbar() {
             onClick={() => setMobileMenuOpen(false)}
             className="block rounded-lg px-3 py-2 text-sm font-medium text-stone-800 hover:bg-stone-100"
           >
-            My Weddings & Invitations
+            My Events & Invitations
           </Link>
           <div className="pt-2 border-t border-stone-100">
             <button

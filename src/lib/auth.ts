@@ -1,3 +1,4 @@
+import { validateIdentifier } from "./contact-validation";
 import crypto from "crypto";
 import { cookies, headers } from "next/headers";
 import { prisma } from "./prisma";
@@ -105,6 +106,8 @@ export async function hydrateBackupWeddingsFromCookie(): Promise<void> {
             id: w.id,
             slug: w.slug,
             ownerUserId: dbUser.id,
+            eventType: w.eventType || "Wedding",
+            otherEventType: w.otherEventType || "",
             eventTitle: w.eventTitle,
             coupleNames: w.coupleNames,
             date: new Date(w.date),
@@ -157,6 +160,8 @@ export async function buildWeddingsBackupCookieValue(
         id: w.id,
         slug: w.slug,
         ownerUserId: w.ownerUserId,
+        eventType: w.eventType,
+        otherEventType: w.otherEventType,
         eventTitle: w.eventTitle,
         coupleNames: w.coupleNames,
         date: w.date.toISOString(),
@@ -323,10 +328,7 @@ export async function createOtpChallenge(params: {
   signedChallengeToken: string;
   devVerificationCode?: string;
 }> {
-  const cleanIdentifier =
-    params.channel === "email"
-      ? normalizeEmail(params.identifier)
-      : normalizePhone(params.identifier);
+  const cleanIdentifier = validateIdentifier(params.identifier, params.channel);
 
   if (!cleanIdentifier) {
     throw new Error(
@@ -381,10 +383,10 @@ export async function createOtpChallenge(params: {
       body: JSON.stringify({
         from:
           process.env.EMAIL_FROM ||
-          "Wedding Memories <onboarding@resend.dev>",
+          "Memorica <onboarding@resend.dev>",
         to: [cleanIdentifier],
-        subject: `Your Wedding Memories verification code: ${code}`,
-        html: `<p>Your verification code for <strong>Wedding Memories</strong> is:</p><h2 style="letter-spacing: 4px;">${code}</h2><p>This code expires in 10 minutes.</p>`,
+        subject: `Your Memorica verification code: ${code}`,
+        html: `<p>Your verification code for <strong>Memorica</strong> is:</p><h2 style="letter-spacing: 4px;">${code}</h2><p>This code expires in 10 minutes.</p>`,
       }),
     }).catch((e) => console.error("Resend email delivery error:", e));
   }
@@ -395,7 +397,7 @@ export async function createOtpChallenge(params: {
 
   if (isLocalWithoutProvider) {
     console.info(
-      `[Wedding Memories Auth] Verification code for ${cleanIdentifier} (${params.channel}): ${code}`
+      `[Memorica Auth] Verification code for ${cleanIdentifier} (${params.channel}): ${code}`
     );
   }
 
@@ -413,10 +415,7 @@ export async function verifyOtpChallenge(params: {
   channel: "email" | "phone";
   code: string;
 }): Promise<{ verifiedIdentifier: string }> {
-  const cleanIdentifier =
-    params.channel === "email"
-      ? normalizeEmail(params.identifier)
-      : normalizePhone(params.identifier);
+  const cleanIdentifier = validateIdentifier(params.identifier, params.channel);
 
   if (!cleanIdentifier) {
     throw new Error("Invalid email or phone identifier.");
