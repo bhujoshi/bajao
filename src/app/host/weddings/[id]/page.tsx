@@ -1,4 +1,5 @@
 "use client";
+import WhatsAppInvitations from "@/components/WhatsAppInvitations";
 import EventCreatedCelebration from "@/components/EventCreatedCelebration";
 import EventSetupForm, { MediaPreview } from "@/components/EventSetupForm";
 import { missingEventDetails, invitationOptions } from "@/lib/event-setup";
@@ -1509,6 +1510,7 @@ export default function HostWeddingWorkspacePage() {
 
       {/* TAB 2: INVITATION MESSAGE / CARD & SHARE INVITATIONS */}
       {activeTab === "share" && <div className="space-y-6">
+        {!missingEventDetails(wedding).length && <WhatsAppInvitations wedding={wedding} guests={guests} onSent={loadWorkspace} />}
         <EventSetupForm mode="invitations" wedding={wedding} onSaved={updated => {setWedding(updated); setEditDescription(updated.description || "");}} onInvite={() => setActiveTab("guests")} />
         {!missingEventDetails(wedding).length && <section className="rounded-2xl bg-white border p-6"><h2 className="font-semibold mb-4">Share your invitation</h2><div className="flex flex-wrap gap-3">
           <button className="rounded-xl bg-rose-700 text-white px-4 py-3" onClick={() => handleShareInvite({mode:"copy"})}>Choose card & copy link</button>

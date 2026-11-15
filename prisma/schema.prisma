@@ -79,6 +79,7 @@ model Wedding {
 }
 
 model Guest {
+  whatsappInvitations WhatsAppInvitation[]
   invitationKey            String    @default("overall")
   id                       String    @id @default(cuid())
   weddingId                String
@@ -165,4 +166,20 @@ model EventAsset {
   mime String
   data Bytes
   @@index([weddingId])
+}
+
+model WhatsAppInvitation {
+  id            String   @id @default(cuid())
+  guestId       String
+  guest         Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  invitationKey String
+  recipient     String
+  consentAt     DateTime
+  status        String   @default("sending")
+  messageId     String?
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([guestId, invitationKey])
 }
