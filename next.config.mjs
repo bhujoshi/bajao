@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     outputFileTracingIncludes: {
-      "/**": ["./prisma/dev.db"],
+      "/**": ["./prisma/dev.db", "./node_modules/.prisma/client/**"],
     },
   },
 };
