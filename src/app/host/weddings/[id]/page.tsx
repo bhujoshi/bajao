@@ -105,6 +105,7 @@ export default function HostWeddingWorkspacePage() {
   const [manualEmail, setManualEmail] = useState("");
   const [manualPhone, setManualPhone] = useState("");
   const [guestInvitationKey, setGuestInvitationKey] = useState("");
+  const [whatsAppGuestId, setWhatsAppGuestId] = useState("");
   const [shareRequest, setShareRequest] = useState<{guest?: GuestDTO; mode: "copy" | "web_share" | "whatsapp"} | null>(null);
   const [shareInvitationKey, setShareInvitationKey] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
@@ -1482,13 +1483,14 @@ export default function HostWeddingWorkspacePage() {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          handleShareInvite({ guest: g, mode: "whatsapp" })
-                        }
+                        onClick={() => {
+                          setWhatsAppGuestId(g.id);
+                          setActiveTab("share");
+                        }}
                         className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition"
                       >
                         <Share2 className="h-3.5 w-3.5" />
-                        Open WhatsApp
+                        Share invitation
                       </button>
 
                       <button
@@ -1510,11 +1512,11 @@ export default function HostWeddingWorkspacePage() {
 
       {/* TAB 2: INVITATION MESSAGE / CARD & SHARE INVITATIONS */}
       {activeTab === "share" && <div className="space-y-6">
-        <WhatsAppInvitations wedding={wedding} guests={guests} onSent={loadWorkspace} />
+        <WhatsAppInvitations key={`${wedding.id}:${whatsAppGuestId}`} wedding={wedding} guests={guests} initialGuestId={whatsAppGuestId} onSent={loadWorkspace} />
         <EventSetupForm mode="invitations" wedding={wedding} onSaved={updated => {setWedding(updated); setEditDescription(updated.description || "");}} onInvite={() => setActiveTab("guests")} />
         {!missingEventDetails(wedding).length && <section className="rounded-2xl bg-white border p-6"><h2 className="font-semibold mb-4">Share your invitation</h2><div className="flex flex-wrap gap-3">
           <button className="rounded-xl bg-rose-700 text-white px-4 py-3" onClick={() => handleShareInvite({mode:"copy"})}>Choose card & copy link</button>
-          <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"web_share"})}>Share invitation</button>
+          <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"web_share"})}>Share using device</button>
           <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"whatsapp"})}>Open WhatsApp</button>
         </div></section>}
       </div>}

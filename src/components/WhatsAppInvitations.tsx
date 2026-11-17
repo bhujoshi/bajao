@@ -5,11 +5,14 @@ import { invitationOptions } from "@/lib/event-setup";
 import { MediaPreview } from "./EventSetupForm";
 type Delivery = {guestId:string;invitationKey:string;status:string;error:string|null};
 type Connection = {weddingTemplate?:boolean;testRecipients?:string[];ready:boolean;missing:string[];deliveries:Delivery[]};
-export default function WhatsAppInvitations({wedding,guests,onSent}:{wedding:WeddingDTO;guests:GuestDTO[];onSent:()=>Promise<void>}) {
+export default function WhatsAppInvitations({wedding,guests,onSent,initialGuestId=""}:{wedding:WeddingDTO;guests:GuestDTO[];onSent:()=>Promise<void>;initialGuestId?:string}) {
   const [connection,setConnection] = useState<Connection|null>(null);
   const [testPhone,setTestPhone] = useState("");
-  const [guestId,setGuestId] = useState("");
-  const [invitationKey,setInvitationKey] = useState("");
+  const [guestId,setGuestId] = useState(initialGuestId);
+  const [invitationKey,setInvitationKey] = useState(()=>{
+    const assigned = guests.find(g=>g.id===initialGuestId)?.invitationKey;
+    return invitationOptions(wedding).some(o=>o.key===assigned) ? assigned! : "";
+  });
   const [consent,setConsent] = useState(false);
   const [busy,setBusy] = useState(false);
   const [review,setReview] = useState(false);
@@ -54,7 +57,7 @@ export default function WhatsAppInvitations({wedding,guests,onSent}:{wedding:Wed
   return <section className="rounded-2xl border border-emerald-200 bg-white p-6 space-y-4">
     <h2 className="font-serif text-xl font-bold">Send through Memorica WhatsApp</h2>
     <p className="text-sm text-stone-600">Send a personal invitation directly from Memorica’s business number. The message links to your selected event or sub-event card.</p>
-    {!connection ? <p className="text-sm">Checking WhatsApp connection…</p> : !connection.ready ? <div className="rounded-xl bg-amber-50 p-4 text-sm"><strong>Connection setup needed</strong><p className="mt-1">Still needed: {connection.missing.join(", ")}. You can continue using the regular WhatsApp share button meanwhile.</p></div> : <p className="text-sm text-emerald-700">WhatsApp is configured for this account.</p>}
+    {!connection ? <p className="text-sm">Checking WhatsApp connection…</p> : !connection.ready ? <div className="rounded-xl bg-amber-50 p-4 text-sm"><strong>Connection setup needed</strong><p className="mt-1">Still needed: {connection.missing.join(", ")}. Sending will be available after these settings are complete.</p></div> : <p className="text-sm text-emerald-700">WhatsApp is configured for this account.</p>}
     {!!connection?.testRecipients?.length && <div className="rounded-xl bg-sky-50 border border-sky-200 p-4 space-y-3">
       <h3 className="font-semibold">Local WhatsApp test</h3>
       <p className="text-sm">Send Meta’s “Hello World” sample directly to a verified test number. This checks the connection; it does not send your event invitation or card.</p>
@@ -62,8 +65,9 @@ export default function WhatsAppInvitations({wedding,guests,onSent}:{wedding:Wed
       <button type="button" disabled={!testPhone||busy} onClick={sendSample} className="rounded-xl bg-emerald-700 px-4 py-2 text-white disabled:opacity-40">{busy?"Sending…":"Send WhatsApp sample"}</button>
     </div>}
     <button type="button" disabled={busy} className="text-sm underline text-emerald-800" onClick={()=>refresh().catch(e=>{setNotice(e.message);setError(true);})}>Refresh connection and send status</button>
-    <div className="grid sm:grid-cols-2 gap-4"><label className="text-sm font-medium">Guest<select className={field} disabled={busy} value={guestId} onChange={e=>{setGuestId(e.target.value);setConsent(false);setReview(false);setInvitationKey(guests.find(g=>g.id===e.target.value)?.invitationKey||"");}}><option value="">Choose a guest</option>{guests.map(g=><option key={g.id} value={g.id} disabled={!g.phone}>{g.name}{g.phone?` · ${g.phone}`:" · phone number needed"}</option>)}</select></label>
+    <div className="grid sm:grid-cols-2 gap-4"><label className="text-sm font-medium">Guest<select className={field} disabled={busy} value={guestId} onChange={e=>{setGuestId(e.target.value);setConsent(false);setReview(false);const assigned=guests.find(g=>g.id===e.target.value)?.invitationKey;setInvitationKey(choices.some(o=>o.key===assigned)?assigned!:"");}}><option value="">Choose a guest</option>{guests.map(g=><option key={g.id} value={g.id} disabled={!g.phone}>{g.name}{g.phone?` · ${g.phone}`:" · phone number needed"}</option>)}</select></label>
     <label className="text-sm font-medium">Invitation card<select className={field} disabled={busy} value={invitationKey} onChange={e=>{setInvitationKey(e.target.value);setReview(false);}}><option value="">Choose an event</option>{choices.map(o=><option key={o.key} value={o.key}>{o.title}</option>)}</select></label></div>
+    {guest && !guest.phone && <p role="alert" className="text-sm text-amber-800">Add a phone number with its country code for this guest before sending a WhatsApp invitation.</p>}
     {!guests.length && <p className="text-sm text-stone-600">Add guests with phone numbers in Invite Contacts first.</p>}
     {prior && <p className="rounded-xl bg-stone-50 p-3 text-sm">Previous send: <strong>{prior.status==="accepted"?"Accepted by WhatsApp; delivery not confirmed":prior.status}</strong>{prior.error&&` — ${prior.error}`}</p>}
     <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={consent} disabled={busy} onChange={e=>setConsent(e.target.checked)}/><span>This guest agreed to receive event invitations from Memorica on WhatsApp.</span></label>
@@ -83,7 +87,7 @@ Your presence, love and blessings would mean so much to us as we begin this new 
 
 ✨ Come make memories with us!`}</div> : <div className="rounded-xl bg-emerald-50 p-4 text-sm">Hi {guest.name}, you’re invited to {choice.title}. View your invitation and RSVP: <span className="underline">[personal invitation link]</span></div>}
       <MediaPreview asset={choice.card}/><p className="text-xs text-stone-500">The card is available through the invitation link. Meta’s approved template controls the final message wording.</p>
-      <div className="flex gap-3"><button type="button" disabled={busy} onClick={()=>setReview(false)} className="border rounded-xl px-4 py-2">Cancel</button><button type="button" disabled={busy||blocked||!consent||!connection?.ready} onClick={send} className="rounded-xl px-4 py-2 bg-emerald-700 text-white disabled:opacity-40">{busy?"Sending…":"Send WhatsApp invitation"}</button></div>
+      <div className="flex gap-3"><button type="button" disabled={busy} onClick={()=>setReview(false)} className="border rounded-xl px-4 py-2">Cancel</button><button type="button" disabled={busy||blocked||!consent||!connection?.ready||!guest.phone} onClick={send} className="rounded-xl px-4 py-2 bg-emerald-700 text-white disabled:opacity-40">{busy?"Sending…":"Send WhatsApp invitation"}</button></div>
       {notice&&<p role={error?"alert":"status"} className="text-sm">{notice}</p>}
     </div></div>}
     {notice&&<p role={error?"alert":"status"} className={`text-sm ${error?"text-red-700":"text-emerald-800"}`}>{notice}</p>}

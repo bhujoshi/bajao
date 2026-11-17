@@ -1,6 +1,6 @@
 # Memorica WhatsApp integration
 
-The host workspace's **Invitation Card & Share** tab includes **Send through Memorica WhatsApp**. Select a guest and an overall/sub-event invitation, confirm opt-in, review, then send. The existing WhatsApp share option continues to work independently.
+Each guest’s **Share invitation** button opens **Invitation Card & Share → Send through Memorica WhatsApp**, with that guest and their saved invitation card selected. No message is sent until the host confirms opt-in, reviews the invitation and presses Send. The host workspace's **Invitation Card & Share** tab also includes **Send through Memorica WhatsApp**. Select a guest and an overall/sub-event invitation, confirm opt-in, review, then send. The existing WhatsApp share option continues to work independently.
 
 ## Current scope
 
