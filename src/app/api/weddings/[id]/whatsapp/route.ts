@@ -4,7 +4,7 @@ import { getWeddingAccess } from "@/lib/db";
 import { invitationOptions, missingEventDetails } from "@/lib/event-setup";
 import { prisma } from "@/lib/prisma";
 import { validateIdentifier } from "@/lib/contact-validation";
-import { sendWhatsAppInvitation, whatsappConfig, WhatsAppSendError } from "@/lib/whatsapp";
+import { sendWhatsAppInvitation, whatsappConfig, WhatsAppSendError, whatsappTestRecipients } from "@/lib/whatsapp";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -19,8 +19,10 @@ export async function GET(_req:NextRequest,{params}:{params:{id:string}}) {
   if (!access) return NextResponse.json({error:"Only the event owner can view WhatsApp settings."},{status:403});
   const config = whatsappConfig();
   const enabled = config.hostIds.includes(access.user.id);
+  const weddingMissing = config.weddingTemplate ? (access.wedding.eventType !== "Wedding" ? ["a wedding event for the configured template"] : !access.wedding.setup.groomName.trim() || !access.wedding.setup.brideName.trim() ? ["groom and bride names in event details"] : []) : [];
+  const missing = [...config.missing,...weddingMissing];
   const deliveries = await prisma.whatsAppInvitation.findMany({where:{guest:{weddingId:access.wedding.id}},select:{guestId:true,invitationKey:true,status:true,error:true,updatedAt:true}});
-  return NextResponse.json({ready:!config.missing.length && enabled,missing:enabled?config.missing:[...config.missing.filter(m=>m!=="authorized sending account"),"authorization for this sending account"],deliveries});
+  return NextResponse.json({testRecipients:whatsappTestRecipients(),weddingTemplate:config.weddingTemplate,ready:!missing.length && enabled,missing:enabled?missing:[...missing.filter(m=>m!=="authorized sending account"),"authorization for this sending account"],deliveries});
 }
 export async function POST(req:NextRequest,{params}:{params:{id:string}}) {
   const access = await accessFor(params.id);
@@ -28,6 +30,7 @@ export async function POST(req:NextRequest,{params}:{params:{id:string}}) {
   const config = whatsappConfig();
   if (config.missing.length || !config.hostIds.includes(access.user.id)) return NextResponse.json({error:"WhatsApp sending is not configured for this account yet."},{status:503});
   if (missingEventDetails(access.wedding).length) return NextResponse.json({error:"Complete the event and invitation details first."},{status:400});
+  if (config.weddingTemplate && (access.wedding.eventType !== "Wedding" || !access.wedding.setup.groomName.trim() || !access.wedding.setup.brideName.trim())) return NextResponse.json({error:"This template requires a wedding event with groom and bride names saved in event details."},{status:400});
   try {
     const body = await req.json();
     if (body.consentConfirmed !== true || typeof body.guestId !== "string" || typeof body.invitationKey !== "string") return NextResponse.json({error:"Select a guest and invitation, and confirm their permission to receive WhatsApp messages."},{status:400});
@@ -50,7 +53,7 @@ export async function POST(req:NextRequest,{params}:{params:{id:string}}) {
       delivery = previous;
     }
     let messageId:string;
-    try { messageId = await sendWhatsAppInvitation({phone,name:guest.name,title:choice.title,url:url.toString()}); }
+    try { messageId = await sendWhatsAppInvitation({phone,name:guest.name,title:choice.title,groomName:access.wedding.setup.groomName,brideName:access.wedding.setup.brideName,url:url.toString()}); }
     catch (error) {
       const known = error instanceof WhatsAppSendError;
       const message = known ? error.message : "The send result could not be confirmed. Check before resending.";

@@ -19,25 +19,41 @@ export function whatsappConfig() {
     !/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(language) && "template language",
     !origin && "public HTTPS Memorica address", !hostIds.length && "authorized sending account",
   ].filter(Boolean) as string[];
-  return {token,phoneNumberId,version,template,language,hostIds,origin,missing};
+  return {token,phoneNumberId,version,template,language,hostIds,origin,missing,weddingTemplate:template === "memorica_wedding_celebration"};
 }
-export function invitationPayload(input: {phone:string;name:string;title:string;url:string}, config = whatsappConfig()) {
+export function invitationPayload(input: {phone:string;name:string;title:string;url:string;groomName?:string;brideName?:string}, config = whatsappConfig()) {
   const phone = validateIdentifier(input.phone, "phone").slice(1);
   // Template contract: three positional BODY parameters, no header or buttons.
   const text = (value:string) => value.replace(/\s+/g, " ").trim();
-  return {messaging_product:"whatsapp",to:phone,type:"template",template:{name:config.template,language:{code:config.language},components:[{type:"body",parameters:[input.name,input.title,input.url].map(value=>({type:"text",text:text(value)}))}]}};
+  if (config.weddingTemplate && (!input.groomName?.trim() || !input.brideName?.trim())) throw new Error("Add the groom’s and bride’s names in event details before sending.");
+  const parameters = config.weddingTemplate ? [input.groomName!,input.brideName!,input.url] : [input.name,input.title,input.url];
+  return {messaging_product:"whatsapp",to:phone,type:"template",template:{name:config.template,language:{code:config.language},components:[{type:"body",parameters:parameters.map(value=>({type:"text",text:text(value)}))}]}};
 }
 export class WhatsAppSendError extends Error {
   constructor(message:string, public uncertain = false) { super(message); }
 }
-export async function sendWhatsAppInvitation(input: {phone:string;name:string;title:string;url:string}, transport: typeof fetch = fetch) {
+export async function sendWhatsAppInvitation(input: {phone:string;name:string;title:string;url:string;groomName?:string;brideName?:string}, transport: typeof fetch = fetch) {
   const config = whatsappConfig();
   if (config.missing.length) throw new WhatsAppSendError("WhatsApp setup is incomplete.");
+  return sendPayload(invitationPayload(input, config), config, transport);
+}
+export function whatsappTestRecipients(): string[] {
+  if (process.env.NODE_ENV !== "development") return [];
+  return (process.env.WHATSAPP_TEST_RECIPIENTS || "").split(",").map(s=>s.trim()).filter(Boolean).map(s=>validateIdentifier(s,"phone"));
+}
+export async function sendWhatsAppSample(phone:string, transport:typeof fetch = fetch) {
+  const config = whatsappConfig();
+  const normalized = validateIdentifier(phone,"phone");
+  if (!whatsappTestRecipients().includes(normalized)) throw new WhatsAppSendError("Choose a configured local test recipient.");
+  if (!config.token || !/^\d+$/.test(config.phoneNumberId) || !/^v\d+\.0$/.test(config.version)) throw new WhatsAppSendError("Configure the Meta token and test sender first.");
+  return sendPayload({messaging_product:"whatsapp",to:normalized.slice(1),type:"template",template:{name:"hello_world",language:{code:"en_US"}}},config,transport);
+}
+async function sendPayload(payload:unknown,config:ReturnType<typeof whatsappConfig>,transport:typeof fetch) {
   let response: Response;
   try {
     response = await transport(`https://graph.facebook.com/${config.version}/${config.phoneNumberId}/messages`, {
       method:"POST",headers:{Authorization:`Bearer ${config.token}`,"Content-Type":"application/json"},
-      body:JSON.stringify(invitationPayload(input, config)),signal:AbortSignal.timeout(15000),
+      body:JSON.stringify(payload),signal:AbortSignal.timeout(15000),
     });
   } catch { throw new WhatsAppSendError("Meta’s response could not be confirmed. Check WhatsApp before trying again to avoid a duplicate.", true); }
   const data = await response.json().catch(()=>null);

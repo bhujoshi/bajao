@@ -2,6 +2,8 @@ export const EVENT_TYPES = ["Office outing", "Conference meeting", "Wedding", "O
 export interface EventMedia { id: string; name: string; mime: string }
 export interface SubEvent { id: string; name: string; from: string; to: string; remarks: string; card: EventMedia | null }
 export interface EventSetup {
+  groomName: string;
+  brideName: string;
   invitationMode: "universal" | "specific";
   subEvents: SubEvent[];
   partnerOneMother: string;
@@ -14,6 +16,7 @@ export interface EventSetup {
   photos: EventMedia[];
 }
 export const EMPTY_SETUP: EventSetup = {
+  groomName: "", brideName: "",
   invitationMode: "universal", subEvents: [],
   partnerOneMother: "", partnerOneFather: "", partnerTwoMother: "", partnerTwoFather: "",
   coupleHashtag: "", otherHashtags: "", card: null, photos: [],
@@ -22,7 +25,7 @@ export function normalizeEventSetup(value: unknown): EventSetup {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid event details.");
   const input = value as Record<string, unknown>;
   const result = { ...EMPTY_SETUP };
-  for (const key of ["partnerOneMother", "partnerOneFather", "partnerTwoMother", "partnerTwoFather", "coupleHashtag", "otherHashtags"] as const) {
+  for (const key of ["groomName", "brideName", "partnerOneMother", "partnerOneFather", "partnerTwoMother", "partnerTwoFather", "coupleHashtag", "otherHashtags"] as const) {
     if (input[key] !== undefined && typeof input[key] !== "string") throw new Error("Invalid event details.");
     result[key] = String(input[key] || "").trim().slice(0, 500);
   }

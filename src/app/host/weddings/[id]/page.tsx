@@ -1488,7 +1488,7 @@ export default function HostWeddingWorkspacePage() {
                         className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition"
                       >
                         <Share2 className="h-3.5 w-3.5" />
-                        Share
+                        Open WhatsApp
                       </button>
 
                       <button
@@ -1510,12 +1510,12 @@ export default function HostWeddingWorkspacePage() {
 
       {/* TAB 2: INVITATION MESSAGE / CARD & SHARE INVITATIONS */}
       {activeTab === "share" && <div className="space-y-6">
-        {!missingEventDetails(wedding).length && <WhatsAppInvitations wedding={wedding} guests={guests} onSent={loadWorkspace} />}
+        <WhatsAppInvitations wedding={wedding} guests={guests} onSent={loadWorkspace} />
         <EventSetupForm mode="invitations" wedding={wedding} onSaved={updated => {setWedding(updated); setEditDescription(updated.description || "");}} onInvite={() => setActiveTab("guests")} />
         {!missingEventDetails(wedding).length && <section className="rounded-2xl bg-white border p-6"><h2 className="font-semibold mb-4">Share your invitation</h2><div className="flex flex-wrap gap-3">
           <button className="rounded-xl bg-rose-700 text-white px-4 py-3" onClick={() => handleShareInvite({mode:"copy"})}>Choose card & copy link</button>
           <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"web_share"})}>Share invitation</button>
-          <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"whatsapp"})}>WhatsApp</button>
+          <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"whatsapp"})}>Open WhatsApp</button>
         </div></section>}
       </div>}
       {shareRequest && <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Choose invitation card"><div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-auto space-y-4">

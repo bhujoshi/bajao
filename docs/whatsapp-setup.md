@@ -47,3 +47,30 @@ The allowlist authorizes specific Memorica accounts to use the shared Meta sende
 Meta's test number is for approved test recipients. Production requires your sender setup and appropriate Meta permissions. No account settings, tokens, templates or messages are created automatically by this code.
 
 References: [Meta Cloud API collection](https://www.postman.com/meta/whatsapp-business-platform/collection/wlk6lh4/whatsapp-cloud-api), [Meta message templates](https://developers.facebook.com/docs/graph-api/reference/whats-app-business-account/message_templates/).
+
+## Local sample test without hosting
+
+Set `WHATSAPP_TEST_RECIPIENTS` in the private `.env` to comma-separated international phone numbers already verified in Meta. In the local event’s Invitation Card & Share tab, choose a test recipient and click **Send WhatsApp sample**. This sends the approved `hello_world` template directly through Meta, without an event link or card. No HTTPS address or custom invitation template is needed for this sample.
+
+The sample endpoint requires development mode, a localhost request with a matching Origin, and the signed-in event owner. Only configured recipients are allowed; attempts are limited to once a minute per user in the local process. This feature is disabled in production. The **Open WhatsApp** action still opens the regular WhatsApp app for manual sharing.
+
+## Wedding celebration template
+
+Use `WHATSAPP_INVITATION_TEMPLATE="memorica_wedding_celebration"` with language `en_US` only after Meta approves this template. Its three positional body parameters are **groom name, bride name, personal invitation URL**, with no header or buttons. Other template names retain the original guest-name/event-title/URL contract. This wedding template is blocked for non-wedding events or until both separate names are saved in Event details; existing combined couple names are never guessed or split. The selected overall/sub-event card remains encoded in the personal invitation URL.
+
+Submitted wording (Marketing category; final category and approval controlled by Meta):
+
+```
+🌸 *Two hearts. One beautiful beginning.* 🌸
+
+With joyful hearts, we invite you to celebrate the wedding of
+
+🤵 *{{1}}* & 👰 *{{2}}*
+
+Your presence, love and blessings would mean so much to us as we begin this new chapter. 💕
+
+💌 Click the Memorica link below to explore the invitation, wedding celebrations, dates and venue details, and confirm your attendance:
+{{3}}
+
+✨ Come make memories with us!
+```

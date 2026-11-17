@@ -72,6 +72,8 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
     {mode === "details" && <>
       {isWedding && <section className="rounded-2xl border bg-white p-6 space-y-5">
         <h3 className="font-serif text-xl font-bold">The couple & their families</h3>
+        <div className="grid sm:grid-cols-2 gap-4">{([['groomName','Groom’s name'],['brideName','Bride’s name']] as const).map(([key,label])=><label key={key} className="text-sm font-medium">{label}<input value={setup[key]} maxLength={160} onChange={e=>setSetup({...setup,[key]:e.target.value})} className={inputClass}/></label>)}</div>
+        <p className="text-sm text-stone-600">Groom and bride names are required for the wedding WhatsApp invitation.</p>
         <p className="text-sm text-stone-600">{wedding.coupleNames} · Enter the family names in the same partner order.</p>
         <div className="grid sm:grid-cols-2 gap-4">{([['partnerOneMother','First partner’s mother'],['partnerOneFather','First partner’s father'],['partnerTwoMother','Second partner’s mother'],['partnerTwoFather','Second partner’s father'],['coupleHashtag','Wedding hashtag for the couple'],['otherHashtags','Other wedding hashtags']] as const).map(([key,label])=><label key={key} className="text-sm font-medium">{label} *<input value={setup[key]} maxLength={500} onChange={e=>setSetup({...setup,[key]:e.target.value})} placeholder={key.includes('Hashtag')?'#TogetherForever':'Full name'} className={inputClass}/></label>)}</div>
       </section>}
