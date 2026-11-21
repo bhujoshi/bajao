@@ -41,8 +41,6 @@ export default function HomePage() {
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [eventType, setEventType] = useState("Wedding");
-  const [otherEventType, setOtherEventType] = useState("");
-  const [coupleNames, setCoupleNames] = useState("");
   const [eventTitle, setEventTitle] = useState("");
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -105,8 +103,6 @@ export default function HomePage() {
         },
         body: JSON.stringify({
           eventType,
-          otherEventType,
-          coupleNames,
           eventTitle,
           date: startObj.toISOString(),
           endDate: endObj.toISOString(),
@@ -405,254 +401,30 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Hosted events grouped by their inclusive calendar date range. */}
-      {eventGroups.map(group => <section key={group.id} className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="font-serif text-2xl font-bold text-stone-900 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-rose-700" />
-              {group.title}
-            </h2>
-            <p className="text-xs text-stone-500">
-              {group.description}
-            </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        {eventGroups.map(group => <section key={group.id} className="rounded-2xl border border-stone-200 bg-white p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-serif text-lg font-bold text-stone-900">{group.title}</h2>
+            <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800">{group.events.length}</span>
           </div>
-          {group.id === "ongoing" && group.events.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setCreateModalOpen(true)}
-              className="inline-flex items-center gap-1.5 self-start rounded-xl bg-rose-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-800 transition"
-            >
-              <Plus className="h-4 w-4" />
-              Create an Event
-            </button>
-          )}
-        </div>
-
-        {group.events.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-10 text-center space-y-3">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-700">
-              <Heart className="h-6 w-6" />
-            </div>
-            <div className="max-w-md mx-auto space-y-1">
-              <h3 className="text-base font-bold text-stone-900">
-                {group.id === "ongoing" ? "No ongoing event right now" : group.id === "upcoming" ? "No upcoming events" : "Your event history starts here"}
-              </h3>
-              <p className="text-xs text-stone-500 leading-relaxed">
-                {group.id === "past" ? "Events appear here after their end date, with guest lists and memories available to revisit." : "Create an event, complete its details, and invite your contacts to join."}
-              </p>
-            </div>
-            {group.id === "ongoing" && <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setCreateModalOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-700 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-800 transition"
-              >
-                <Plus className="h-4 w-4" />
-                Create an Event
-              </button>
-            </div>}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {group.events.map((w) => (
-              <div
-                key={w.id}
-                className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6 shadow-sm hover:border-rose-300 transition space-y-5"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-[11px] font-semibold text-rose-800">
-                        Host
-                      </span>
-                      {w.stats.conflictCount > 0 && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
-                          <AlertTriangle className="h-3 w-3" />
-                          {w.stats.conflictCount} Guest Conflict Needs Review
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="font-serif text-2xl font-bold text-stone-900">
-                      {w.eventType === "Wedding" ? `${w.coupleNames} — ${w.eventTitle}` : w.eventTitle}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600 pt-1">
-                      <span className="flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5 text-rose-700 shrink-0" />
-                        <span>
-                          {formatWeddingDateRange(w.date, w.endDate)}
-                        </span>
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5 text-rose-700 shrink-0" />
-                        {w.venue}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <Link
-                      href={`/host/weddings/${w.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-rose-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-800 transition"
-                    >
-                      Manage Event
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                    <Link
-                      href={`/invite/${w.slug}`}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-100 transition"
-                    >
-                      Invitation Page
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 pt-2 border-t border-stone-100">
-                  <div className="rounded-xl bg-stone-50 p-3 border border-stone-200/60">
-                    <div className="text-[11px] text-stone-500">
-                      Total Guests
-                    </div>
-                    <div className="text-lg font-bold text-stone-900">
-                      {w.stats.totalGuests}
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-emerald-50/70 p-3 border border-emerald-200/60">
-                    <div className="text-[11px] text-emerald-700 font-medium">
-                      RSVP: Yes
-                    </div>
-                    <div className="text-lg font-bold text-emerald-900">
-                      {w.stats.yesCount}
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-amber-50/70 p-3 border border-amber-200/60">
-                    <div className="text-[11px] text-amber-700 font-medium">
-                      RSVP: Maybe
-                    </div>
-                    <div className="text-lg font-bold text-amber-900">
-                      {w.stats.maybeCount}
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-rose-50/70 p-3 border border-rose-200/60">
-                    <div className="text-[11px] text-rose-700 font-medium">
-                      RSVP: No
-                    </div>
-                    <div className="text-lg font-bold text-rose-900">
-                      {w.stats.noCount}
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-stone-50 p-3 border border-stone-200/60">
-                    <div className="text-[11px] text-stone-500">
-                      Registered Guests
-                    </div>
-                    <div className="text-lg font-bold text-stone-900">
-                      {w.stats.registeredGuests}
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-stone-50 p-3 border border-stone-200/60">
-                    <div className="text-[11px] text-stone-500">
-                      Published Updates
-                    </div>
-                    <div className="text-lg font-bold text-stone-900">
-                      {w.stats.updatesCount}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>)}
-
-      {/* Invited Weddings Section */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="font-serif text-2xl font-bold text-stone-900 flex items-center gap-2">
-            <Bell className="h-5 w-5 text-amber-600" />
-            Events You Are Invited To
-          </h2>
-          <p className="text-xs text-stone-500">
-            Events linked to your verified email or phone number.
-          </p>
-        </div>
-
-        {invitedWeddings.length === 0 ? (
-          <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center space-y-1.5">
-            <p className="text-sm font-medium text-stone-700">
-              No event invitations are linked to your account yet.
-            </p>
-            <p className="text-xs text-stone-500">
-              When a wedding host adds your email or phone number to their guest
-              list—or when you open a shared event invitation link and verify
-              your account—it will appear here automatically.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {invitedWeddings.map((w) => (
-              <div
-                key={w.id}
-                className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm flex flex-col justify-between gap-4"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
-                      Invited Guest
-                    </span>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-                      RSVP:{" "}
-                      <strong
-                        className={
-                          w.myRsvpStatus === "yes"
-                            ? "text-emerald-700"
-                            : w.myRsvpStatus === "no"
-                            ? "text-rose-700"
-                            : w.myRsvpStatus === "maybe"
-                            ? "text-amber-700"
-                            : "text-stone-700"
-                        }
-                      >
-                        {w.myRsvpStatus}
-                      </strong>
-                    </span>
-                  </div>
-                  <h3 className="font-serif text-xl font-bold text-stone-900">
-                    {w.eventType === "Wedding" ? `${w.coupleNames} — ${w.eventTitle}` : w.eventTitle}
-                  </h3>
-                  <p className="text-xs text-stone-600 flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-rose-700 shrink-0" />
-                    <span>{formatWeddingDateRange(w.date, w.endDate)}</span>
-                  </p>
-                  <p className="text-xs text-stone-600 flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5 text-rose-700 shrink-0" />
-                    {w.venue}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-stone-100">
-                  <Link
-                    href={`/events/${w.slug}/updates`}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-rose-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-rose-800 transition"
-                  >
-                    <Bell className="h-3.5 w-3.5" />
-                    View Live Updates ({w.updatesCount})
-                  </Link>
-                  <Link
-                    href={
-                      w.myInviteToken
-                        ? `/invite/${w.slug}?guest=${w.myInviteToken}`
-                        : `/invite/${w.slug}`
-                    }
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2 text-xs font-medium text-stone-700 hover:bg-stone-100 transition"
-                  >
-                    View Invitation / Update RSVP
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+          {group.events.length ? <div className="space-y-2 max-h-80 overflow-y-auto">{group.events.map(w => <div key={w.id} className="rounded-xl bg-stone-50 p-3 space-y-2">
+            <h3 className="text-sm font-semibold">{w.coupleNames ? `${w.coupleNames} — ${w.eventTitle}` : w.eventTitle}</h3>
+            <p className="text-xs text-stone-500">{formatWeddingDateRange(w.date,w.endDate)} · {w.venue}</p>
+            <p className="text-xs text-stone-600">{w.stats.totalGuests} guests · {w.stats.yesCount} attending{w.stats.conflictCount > 0 && ` · ${w.stats.conflictCount} guest conflicts to review`}</p>
+            <div className="flex flex-wrap gap-3 text-xs"><Link className="font-semibold text-rose-700 underline" href={`/host/weddings/${w.id}`}>Manage Event</Link><Link className="text-stone-600 underline" href={`/invite/${w.slug}`}>View invitation</Link></div>
+          </div>)}</div> : <p className="text-sm text-stone-500">{group.id === "ongoing" ? "No ongoing events." : group.id === "upcoming" ? "No upcoming events." : "No previously hosted events yet."}</p>}
+          {group.id === "ongoing" && <button type="button" onClick={()=>setCreateModalOpen(true)} className="rounded-xl bg-rose-700 px-4 py-2 text-xs font-semibold text-white">+ Create an Event</button>}
+        </section>)}
+        <section className="rounded-2xl border border-stone-200 bg-white p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-lg font-bold">Events you are invited to</h2><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold">{invitedWeddings.length}</span></div>
+          {invitedWeddings.length ? <div className="space-y-2 max-h-80 overflow-y-auto">{invitedWeddings.map(w=><div key={w.id} className="rounded-xl bg-stone-50 p-3 space-y-2">
+            <h3 className="text-sm font-semibold">{w.coupleNames ? `${w.coupleNames} — ${w.eventTitle}` : w.eventTitle}</h3>
+            <p className="text-xs text-stone-500">{formatWeddingDateRange(w.date,w.endDate)} · {w.venue}</p>
+            <p className="text-xs text-stone-600">RSVP: {w.myRsvpStatus}</p>
+            <div className="flex flex-wrap gap-3 text-xs"><Link className="font-semibold text-rose-700 underline" href={w.myInviteToken ? `/invite/${w.slug}?guest=${w.myInviteToken}` : `/invite/${w.slug}`}>View invitation / RSVP</Link><Link className="text-stone-600 underline" href={`/events/${w.slug}/updates`}>Live updates ({w.updatesCount})</Link></div>
+          </div>)}</div> : <p className="text-sm text-stone-500">No event invitations yet.</p>}
+        </section>
+      </div>
 
       {/* Create Event Modal */}
       {createModalOpen && (
@@ -685,24 +457,11 @@ export default function HomePage() {
             <form onSubmit={handleCreateWedding} className="space-y-3.5">
               <label className="block text-xs font-semibold text-stone-700">Event Type *
                 <select value={eventType} onChange={e => setEventType(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-300 p-3 bg-white">
-                  {["Office outing", "Conference meeting", "Wedding", "Other"].map(type => <option key={type}>{type}</option>)}
+                  <option value="Wedding">Wedding</option>
                 </select>
               </label>
-              {eventType === "Other" && <label className="block text-xs font-semibold">Name your event type *<input required value={otherEventType} onChange={e => setOtherEventType(e.target.value)} className="mt-1 w-full rounded-xl border p-3" /></label>}
               <p className="text-xs text-stone-500">Step 1 of 2 · Create your event, then complete its details and invitation.</p>
-              {eventType === "Wedding" && <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Couple Names *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder={eventType === "Wedding" ? "e.g. Arjun & Meera" : "Organizer name"}
-                  value={coupleNames}
-                  onChange={(e) => setCoupleNames(e.target.value)}
-                  className="w-full rounded-xl border border-stone-300 px-3.5 py-2 text-sm focus:border-rose-600 focus:outline-none"
-                />
-              </div>}
+
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Event Title *

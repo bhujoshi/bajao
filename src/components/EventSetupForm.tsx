@@ -21,6 +21,11 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
   useEffect(() => { setSetup(wedding.setup); setMessage(wedding.description || ""); }, [wedding]);
   const missing = missingEventDetails({ ...wedding, setup, description: message });
   const isWedding = wedding.eventType === "Wedding";
+  const coupleDone = Boolean(setup.groomName.trim() && setup.brideName.trim());
+  const breakdownDone = setup.subEvents.length > 0 && !missing.some(item => item.startsWith("Sub-event"));
+  const invitationDone = !missing.some(item => /invitation/i.test(item));
+  const sectionClass = (done: boolean) => `rounded-2xl border p-6 space-y-5 ${done ? "border-emerald-300 bg-emerald-50/50" : "bg-white border-stone-200"}`;
+  const doneMark = (done: boolean, optional = false) => <span className={`float-right ml-3 text-xs font-semibold ${done ? "text-emerald-700" : "text-stone-500"}`}>{done ? "✓ Done" : optional ? "Optional" : "Required"}</span>;
   const inputClass = "mt-1 block w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm focus:border-rose-600 focus:outline-none";
   function changeSub(id: string, update: Partial<SubEvent>) { setSetup(prev=>({...prev,subEvents:prev.subEvents.map(sub=>sub.id===id?{...sub,...update}:sub)})); }
   async function upload(files: FileList | null, target: "overall" | "photos" | string) {
@@ -43,15 +48,15 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
     } catch (err) { setError(true); setNotice(err instanceof Error ? err.message : "Upload failed."); }
     finally { setUploading(false); }
   }
-  async function save(e: React.FormEvent) {
-    e.preventDefault(); setBusy(true); setNotice(""); setError(false);
+  async function save(e: React.SyntheticEvent, advance = true) {
+    e.preventDefault();
+    if (advance && missing.length) return; setBusy(true); setNotice(""); setError(false);
     try {
-      const response = await fetch(`/api/weddings/${wedding.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({setup,...(mode === "invitations" ? {description:message} : {})})});
+      const response = await fetch(`/api/weddings/${wedding.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({setup,description:message})});
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
       onSaved(data.wedding);
-      if (mode === "details") { onNext?.(); return; }
-      if (!missingEventDetails(data.wedding).length) { onInvite(); return; }
-      setNotice(`Saved. Still needed: ${missingEventDetails(data.wedding).join("; ")}.`);
+      if (advance && !missingEventDetails(data.wedding).length) { onInvite(); return; }
+      setNotice(missingEventDetails(data.wedding).length ? `Draft saved. Still needed: ${missingEventDetails(data.wedding).join("; ")}.` : "Event details saved.");
     } catch(err) { setError(true); setNotice(err instanceof Error ? err.message : "Could not save details."); }
     finally {setBusy(false);}
   }
@@ -61,25 +66,24 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
       {card && <><MediaPreview asset={card}/><button type="button" onClick={()=>target==="overall"?setSetup({...setup,card:null}):changeSub(target,{card:null})} className="text-xs text-rose-700 underline">Remove card</button></>}
     </div>;
   }
-  return <form onSubmit={save} className="space-y-6">
+  return <form onSubmit={e=>{void save(e);}} className="space-y-6">
     <section className="rounded-3xl border border-rose-200 bg-rose-50/60 p-6 space-y-3">
       <span className="text-xs font-bold uppercase tracking-widest text-rose-700">{mode === "details" ? "Step 1 · Event details" : "Step 2 · Invitation Card & Share"}</span>
       <h2 className="font-serif text-2xl font-bold">{mode === "details" ? "Complete your event details" : "Customize Your Invitation Message & Cards"}</h2>
-      <p className="text-sm text-stone-600">{mode === "details" ? "Add your family, photos and the celebrations within your event. Then choose your invitation cards in the second tab." : "Upload one universal invitation or individual cards for your sub-events. Save your changes before inviting contacts."}</p>
+      <p className="text-sm text-stone-600">{mode === "details" ? "Complete the couple’s names, add your celebrations, and customize your invitation below." : "Upload one universal invitation or individual cards for your sub-events. Save your changes before inviting contacts."}</p>
       {missing.length > 0 && <ul className="flex flex-wrap gap-2">{missing.map(item=><li key={item} className="rounded-full bg-white border border-rose-200 px-3 py-1 text-xs text-rose-800">{item}</li>)}</ul>}
       <p className="text-xs text-stone-500">Fields marked * are needed before inviting contacts. Save a draft at any time.</p>
     </section>
     {mode === "details" && <>
-      {isWedding && <section className="rounded-2xl border bg-white p-6 space-y-5">
-        <h3 className="font-serif text-xl font-bold">The couple & their families</h3>
-        <div className="grid sm:grid-cols-2 gap-4">{([['groomName','Groom’s name'],['brideName','Bride’s name']] as const).map(([key,label])=><label key={key} className="text-sm font-medium">{label}<input value={setup[key]} maxLength={160} onChange={e=>setSetup({...setup,[key]:e.target.value})} className={inputClass}/></label>)}</div>
-        <p className="text-sm text-stone-600">Groom and bride names are required for the wedding WhatsApp invitation.</p>
-        <p className="text-sm text-stone-600">{wedding.coupleNames} · Enter the family names in the same partner order.</p>
-        <div className="grid sm:grid-cols-2 gap-4">{([['partnerOneMother','First partner’s mother'],['partnerOneFather','First partner’s father'],['partnerTwoMother','Second partner’s mother'],['partnerTwoFather','Second partner’s father'],['coupleHashtag','Wedding hashtag for the couple'],['otherHashtags','Other wedding hashtags']] as const).map(([key,label])=><label key={key} className="text-sm font-medium">{label} *<input value={setup[key]} maxLength={500} onChange={e=>setSetup({...setup,[key]:e.target.value})} placeholder={key.includes('Hashtag')?'#TogetherForever':'Full name'} className={inputClass}/></label>)}</div>
-      </section>}
-      <section className="rounded-2xl border bg-white p-6 space-y-5">
-        <h3 className="font-serif text-xl font-bold">Break down your event</h3>
-        <p className="text-sm text-stone-600">Add each celebration, such as Mehndi, Haldi and Wedding. Dates must fall within your overall event range. Times are local to your event venue.</p>
+      {isWedding && <details open className={sectionClass(coupleDone)}>
+        <summary className="cursor-pointer font-serif text-xl font-bold">1. The couple and their family{doneMark(coupleDone)}</summary>
+        <div className="grid sm:grid-cols-2 gap-4">{([['groomName','Groom’s name'],['brideName','Bride’s name']] as const).map(([key,label])=><label key={key} className="text-sm font-medium">{label} *<input value={setup[key]} maxLength={160} onChange={e=>setSetup({...setup,[key]:e.target.value})} className={inputClass}/></label>)}</div>
+        <p className="text-sm text-stone-600">Only the groom’s and bride’s names are required in this section. Family names and hashtags are optional.</p>
+        <div className="grid sm:grid-cols-2 gap-4">{([['partnerOneMother','Groom’s mother'],['partnerOneFather','Groom’s father'],['partnerTwoMother','Bride’s mother'],['partnerTwoFather','Bride’s father'],['coupleHashtag','Wedding hashtag for the couple'],['otherHashtags','Other wedding hashtags']] as const).map(([key,label])=><label key={key} className="text-sm font-medium">{label} (optional)<input value={setup[key]} maxLength={500} onChange={e=>setSetup({...setup,[key]:e.target.value})} placeholder={key.includes('Hashtag')?'#TogetherForever':'Full name'} className={inputClass}/></label>)}</div>
+      </details>}
+      <details className={sectionClass(breakdownDone)}>
+        <summary className="cursor-pointer font-serif text-xl font-bold">2. Break down your event{doneMark(breakdownDone, true)}</summary>
+        <p className="text-sm text-stone-600">This section is optional. Add celebrations such as Mehndi, Haldi and Wedding if you need them. Dates must fall within your overall event range. Times are local to your event venue.</p>
         {!setup.subEvents.length && <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-500">No sub-events yet. Keep a single event or add your schedule below.</p>}
         {setup.subEvents.map((sub,index)=><div key={sub.id} className="rounded-2xl border border-stone-200 p-4 space-y-3">
           <div className="flex items-center justify-between"><h4 className="font-semibold">Event {index+1}</h4><button type="button" onClick={()=>setSetup({...setup,subEvents:setup.subEvents.filter(item=>item.id!==sub.id)})} className="text-xs text-rose-700 underline">Remove sub-event</button></div>
@@ -89,14 +93,10 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
           <label className="block text-sm">Remarks<textarea rows={2} maxLength={2000} value={sub.remarks} onChange={e=>changeSub(sub.id,{remarks:e.target.value})} placeholder="Venue, dress code or anything guests should know" className={inputClass}/></label>
         </div>)}
         <button type="button" disabled={setup.subEvents.length>=50} onClick={()=>setSetup({...setup,subEvents:[...setup.subEvents,{id:crypto.randomUUID(),name:"",from:"",to:"",remarks:"",card:null}]})} className="rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700">+ Add sub-event</button>
-      </section>
-      {isWedding && <section className="rounded-2xl border bg-white p-6 space-y-4">
-        <h3 className="font-serif text-xl font-bold">Couple photos *</h3><p className="text-sm text-stone-600">Add at least one photo of the couple, up to 8 photos.</p>
-        <input aria-label="Upload couple photos" type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" disabled={uploading || busy} onChange={e=>{void upload(e.target.files,'photos');e.target.value='';}} className={inputClass}/>
-        <div className="grid sm:grid-cols-2 gap-4">{setup.photos.map(photo=><div key={photo.id} className="space-y-2"><MediaPreview asset={photo}/><button type="button" onClick={()=>setSetup({...setup,photos:setup.photos.filter(p=>p.id!==photo.id)})} className="text-xs text-rose-700 underline">Remove photo</button></div>)}</div>
-      </section>}
+      </details>
     </>}
-    {mode === "invitations" && <section className="rounded-2xl border bg-white p-6 space-y-5">
+    <details open={mode === "invitations"} className={sectionClass(invitationDone)}>
+      <summary className="cursor-pointer font-serif text-xl font-bold">3. Invitation details{doneMark(invitationDone)}</summary>
       <label className="block text-sm font-medium">Invitation message *<textarea rows={5} value={message} onChange={e=>setMessage(e.target.value)} placeholder="Together with our families, we warmly invite you…" className={inputClass}/></label>
       <fieldset className="space-y-3"><legend className="text-sm font-semibold mb-2">How would you like to use invitation cards?</legend>
         <label className="flex gap-3 rounded-xl border p-4 text-sm"><input type="radio" name="invitationMode" checked={setup.invitationMode==='universal'} onChange={()=>setSetup({...setup,invitationMode:'universal'})}/><span><strong>Universal invitation</strong><br/>Use one card for the overall event and all sub-events.</span></label>
@@ -105,10 +105,11 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
       <p className="text-xs text-stone-500">Photo, animated GIF, MP4 / WebM video or PDF · maximum 20 MB per file. Replacing a card updates its saved invitation link.</p>
       {cardUpload(`${wedding.eventTitle} — ${setup.invitationMode==='universal'?'universal card':'overall event card'}`,"overall",setup.card,setup.invitationMode==='universal'||!setup.subEvents.length)}
       {setup.invitationMode==='specific' && setup.subEvents.map((sub,index)=>cardUpload(sub.name||`Sub-event ${index+1}`,sub.id,sub.card,true))}
-      {setup.invitationMode==='specific' && !setup.subEvents.length && <p className="text-sm text-stone-600">Add sub-events in the first tab to upload specific invitations. For now, upload your overall event card.</p>}
-    </section>}
+      {setup.invitationMode==='specific' && !setup.subEvents.length && <p className="text-sm text-stone-600">Add sub-events in the event breakdown section to upload specific invitations. For now, upload your overall event card.</p>}
+    </details>
     <div className="rounded-2xl border bg-white p-5 flex flex-wrap items-center gap-4">
-      <button disabled={busy||uploading} className="rounded-xl bg-rose-700 text-white px-5 py-3 font-semibold text-sm disabled:opacity-50">{uploading?'Uploading…':busy?'Saving…':mode==='details'?'Save & continue to invitations':missing.length?'Save invitation draft':'Save invitations & invite contacts'}</button>
+      <button type="button" disabled={busy||uploading} onClick={e=>{void save(e,false);}} className="rounded-xl border border-stone-300 px-5 py-3 text-sm font-semibold disabled:opacity-50">Save draft</button>
+      <button type="submit" disabled={busy||uploading||missing.length > 0} className="rounded-xl bg-rose-700 text-white px-5 py-3 font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed">{uploading?'Uploading…':busy?'Saving…':'Save details & invite contacts'}</button>
       <p role={error?'alert':'status'} className={`text-sm ${error?'text-red-700':'text-stone-600'}`}>{notice}</p>
     </div>
   </form>;

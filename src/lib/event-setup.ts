@@ -63,15 +63,13 @@ export function missingEventDetails(event: { eventType: string; coupleNames: str
   if (!event.date || !event.endDate) missing.push("Event date range");
   if (!event.venue.trim()) missing.push("Venue");
   if (event.eventType === "Wedding") {
-    if (!event.coupleNames.trim()) missing.push("Couple names");
-    if (![event.setup.partnerOneMother, event.setup.partnerOneFather, event.setup.partnerTwoMother, event.setup.partnerTwoFather].every(s => s.trim())) missing.push("Both partners’ mother and father names");
-    if (!event.setup.coupleHashtag.trim()) missing.push("Couple hashtag");
-    if (!event.setup.otherHashtags.trim()) missing.push("Other hashtags");
-    if (!event.setup.photos.length) missing.push("Couple photos");
+    if (!event.setup.groomName.trim()) missing.push("Groom’s name");
+    if (!event.setup.brideName.trim()) missing.push("Bride’s name");
   }
   if (!event.description?.trim()) missing.push("Invitation message");
   for (const [index, sub] of event.setup.subEvents.map((sub, index) => [index, sub] as const)) {
-    if (!sub.name || !sub.from || !sub.to) missing.push(`Sub-event ${index + 1}: name and date/time range`);
+    if (!sub.name.trim() || !sub.from || !sub.to) missing.push(`Sub-event ${index + 1}: name and date/time range`);
+    else if (sub.to < sub.from || sub.from.slice(0,10) < event.date.slice(0,10) || sub.to.slice(0,10) > (event.endDate || event.date).slice(0,10)) missing.push(`Sub-event ${index + 1}: dates within the event range`);
   }
   if (event.setup.invitationMode === "universal" || !event.setup.subEvents.length) {
     if (!event.setup.card) missing.push("Overall invitation card");

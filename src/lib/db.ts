@@ -543,7 +543,7 @@ export async function createWedding(params: {
   eventType?: string;
   otherEventType?: string;
   ownerUserId: string;
-  coupleNames: string;
+  coupleNames?: string;
   eventTitle: string;
   date: string;
   endDate: string;
@@ -554,14 +554,11 @@ export async function createWedding(params: {
   if (!EVENT_TYPES.includes(eventType)) throw new Error("Choose a valid event type.");
   const otherEventType = params.otherEventType?.trim() || "";
   if (eventType === "Other" && !otherEventType) throw new Error("Name your event type.");
-  const coupleNames = eventType === "Wedding" ? params.coupleNames.trim() : params.eventTitle.trim();
+  const coupleNames = eventType === "Wedding" ? (params.coupleNames?.trim() || "") : params.eventTitle.trim();
   const eventTitle = params.eventTitle.trim();
   const venue = params.venue.trim();
   const description = params.description?.trim() || null;
 
-  if (!coupleNames || coupleNames.length < 3) {
-    throw new Error("Couple names are required (at least 3 characters).");
-  }
   if (!eventTitle || eventTitle.length < 3) {
     throw new Error("Event title is required (at least 3 characters).");
   }
@@ -730,6 +727,7 @@ export async function updateWedding(
     if (setup.photos.some(photo => !photo.mime.startsWith("image/"))) throw new Error("Couple photos must be images.");
     validateSubEventDates(setup, finalStartDate, finalEndDate);
     dataToUpdate.setupDetails = JSON.stringify(setup);
+    if (wedding.eventType === "Wedding") dataToUpdate.coupleNames = [setup.groomName, setup.brideName].filter(Boolean).join(" & ");
   }
   if (updates.setup === undefined) validateSubEventDates(parseEventSetup(wedding.setupDetails), finalStartDate, finalEndDate);
   const updated = await prisma.wedding.update({
@@ -745,7 +743,7 @@ export async function updateWedding(
  * Never automatically sends invitations (invitationStatus starts as 'not_shared').
  */
 export async function addGuestsToWedding(params: {
-  invitationKey: string;
+  invitationKey?: string;
   weddingId: string;
   ownerUserId: string;
   source: GuestSource;
@@ -776,7 +774,7 @@ export async function addGuestsToWedding(params: {
   }
 
   const choices = invitationOptions(mapWeddingToDTO(wedding));
-  if (!choices.some(option => option.key === params.invitationKey)) throw new Error("Select an available invitation card for these guests.");
+  if (params.invitationKey && !choices.some(option => option.key === params.invitationKey)) throw new Error("Select an available invitation card for these guests.");
   const existingGuests = await prisma.guest.findMany({
     where: { weddingId: wedding.id },
   });
@@ -796,6 +794,7 @@ export async function addGuestsToWedding(params: {
     const phone = normalizePhone(raw.phone);
 
     if (!name) continue;
+    if (params.source === "manual" && !phone) throw new Error(`Guest "${name}" needs a mobile number.`);
     if (!email && !phone) {
       throw new Error(
         `Guest "${name}" must have at least an email address or phone number.`
@@ -833,7 +832,7 @@ export async function addGuestsToWedding(params: {
     const createdGuest = await prisma.guest.create({
       data: {
         weddingId: wedding.id,
-        invitationKey: params.invitationKey,
+        invitationKey: params.invitationKey || "",
         name,
         email,
         phone,

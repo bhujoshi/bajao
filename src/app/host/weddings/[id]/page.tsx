@@ -1,4 +1,5 @@
 "use client";
+import GuestInvitationActions from "@/components/GuestInvitationActions";
 import WhatsAppInvitations from "@/components/WhatsAppInvitations";
 import EventCreatedCelebration from "@/components/EventCreatedCelebration";
 import EventSetupForm, { MediaPreview } from "@/components/EventSetupForm";
@@ -91,7 +92,6 @@ export default function HostWeddingWorkspacePage() {
   );
 
   // Event details edit form state
-  const [editCoupleNames, setEditCoupleNames] = useState("");
   const [editEventTitle, setEditEventTitle] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
@@ -104,7 +104,7 @@ export default function HostWeddingWorkspacePage() {
   const [manualName, setManualName] = useState("");
   const [manualEmail, setManualEmail] = useState("");
   const [manualPhone, setManualPhone] = useState("");
-  const [guestInvitationKey, setGuestInvitationKey] = useState("");
+  const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>([]);
   const [whatsAppGuestId, setWhatsAppGuestId] = useState("");
   const [shareRequest, setShareRequest] = useState<{guest?: GuestDTO; mode: "copy" | "web_share" | "whatsapp"} | null>(null);
   const [shareInvitationKey, setShareInvitationKey] = useState("");
@@ -173,7 +173,6 @@ export default function HostWeddingWorkspacePage() {
       setUpdates(data.updates || []);
       setAnalytics(data.analytics || []);
 
-      setEditCoupleNames(data.wedding.coupleNames);
       setEditEventTitle(data.wedding.eventTitle);
       setEditDate(new Date(data.wedding.date).toISOString().slice(0, 10));
       setEditEndDate(
@@ -220,7 +219,6 @@ export default function HostWeddingWorkspacePage() {
           ...encodeUserHintHeader(user),
         },
         body: JSON.stringify({
-          coupleNames: editCoupleNames,
           eventTitle: editEventTitle,
           date: startObj.toISOString(),
           endDate: endObj.toISOString(),
@@ -277,14 +275,13 @@ export default function HostWeddingWorkspacePage() {
   const handleAddManualGuest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!wedding) return;
-    if (!invitationOptions(wedding).some(o => o.key === guestInvitationKey)) { showToast("error", "Choose an invitation card first."); return; }
+    if (!manualPhone.trim()) { showToast("error", "Enter the guest’s mobile number."); return; }
     setAddingGuest(true);
     try {
       const res = await fetch(`/api/weddings/${wedding.id}/guests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          invitationKey: guestInvitationKey,
           source: "manual",
           skipDuplicates: false,
           candidates: [
@@ -493,14 +490,12 @@ export default function HostWeddingWorkspacePage() {
       return;
     }
 
-    if (!invitationOptions(wedding).some(o => o.key === guestInvitationKey)) { showToast("error", "Choose an invitation card first."); return; }
     setConfirmingImport(true);
     try {
       const res = await fetch(`/api/weddings/${wedding.id}/guests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          invitationKey: guestInvitationKey,
           source: importSource,
           skipDuplicates: false,
           candidates: selected.map((s) => ({
@@ -829,7 +824,7 @@ export default function HostWeddingWorkspacePage() {
               </span>
             </div>
             <h1 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900">
-              {wedding.eventType === "Wedding" ? `${wedding.coupleNames} — ${wedding.eventTitle}` : wedding.eventTitle}
+              {wedding.coupleNames ? `${wedding.coupleNames} — ${wedding.eventTitle}` : wedding.eventTitle}
             </h1>
             <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600">
               <span className="flex items-center gap-1.5">
@@ -965,7 +960,7 @@ export default function HostWeddingWorkspacePage() {
       </div>
 
       {activeTab === "setup" && <EventSetupForm key={wedding.id} wedding={wedding} onNext={() => setActiveTab("share")} onInvite={() => setActiveTab("guests")} onSaved={updated => {setWedding(updated); setEditDescription(updated.description || "");}} />}
-      {activeTab !== "setup" && missingEventDetails(wedding).length > 0 && <div className="rounded-2xl bg-amber-50 border border-amber-200 p-5 text-sm">Complete the event details, invitation message and card, and couple photos before inviting contacts. <button onClick={()=>setActiveTab("setup")} className="underline font-semibold">Complete event details</button></div>}
+      {activeTab !== "setup" && missingEventDetails(wedding).length > 0 && <div className="rounded-2xl bg-amber-50 border border-amber-200 p-5 text-sm">Complete the couple’s names, event details, invitation message and card before inviting contacts. <button onClick={()=>setActiveTab("setup")} className="underline font-semibold">Complete event details</button></div>}
       {/* TAB 1: GUEST LIST & CONTACT IMPORT */}
       {activeTab === "guests" && !missingEventDetails(wedding).length && (
         <div className="space-y-6">
@@ -1156,13 +1151,12 @@ export default function HostWeddingWorkspacePage() {
                     Add Guest Manually
                   </h2>
                   <p className="text-xs text-stone-500">
-                    Enter your guest&apos;s name and their email address or
-                    phone number.
+                    Enter your guest&apos;s name and mobile number. Email is optional.
                   </p>
                 </div>
               </div>
 
-              <form onSubmit={handleAddManualGuest} className="space-y-3"><label className="block text-sm font-medium">Invitation for these contacts<select required className="mt-2 w-full rounded-xl border border-stone-300 p-3 bg-white" value={guestInvitationKey} onChange={e => setGuestInvitationKey(e.target.value)}><option value="">Choose an event invitation</option>{invitationOptions(wedding).map(o => <option key={o.key} value={o.key}>{o.title}</option>)}</select></label>
+              <form onSubmit={handleAddManualGuest} className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-stone-700 mb-1">
@@ -1180,25 +1174,26 @@ export default function HostWeddingWorkspacePage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-stone-700 mb-1">
-                      Email Address
+                      Mobile Number *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="+91 98111 22233"
+                      value={manualPhone}
+                      onChange={(e) => setManualPhone(e.target.value)}
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs focus:border-rose-600 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      Email Address (optional)
                     </label>
                     <input
                       type="email"
                       placeholder="priya@example.com"
                       value={manualEmail}
                       onChange={(e) => setManualEmail(e.target.value)}
-                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs focus:border-rose-600 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-stone-700 mb-1">
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="+91 98111 22233"
-                      value={manualPhone}
-                      onChange={(e) => setManualPhone(e.target.value)}
                       className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs focus:border-rose-600 focus:outline-none"
                     />
                   </div>
@@ -1244,7 +1239,7 @@ export default function HostWeddingWorkspacePage() {
                   </button>
                 </div>
 
-                <label className="block text-sm font-medium">Invitation for these contacts<select required className="mt-2 w-full rounded-xl border border-stone-300 p-3 bg-white" value={guestInvitationKey} onChange={e => setGuestInvitationKey(e.target.value)}><option value="">Choose an event invitation</option>{invitationOptions(wedding).map(o => <option key={o.key} value={o.key}>{o.title}</option>)}</select></label><div className="overflow-y-auto flex-1 space-y-2 pr-1">
+                <div className="overflow-y-auto flex-1 space-y-2 pr-1">
                   {importPreview.map((item, idx) => (
                     <label
                       key={item.tempId}
@@ -1386,6 +1381,11 @@ export default function HostWeddingWorkspacePage() {
               </div>
             </div>
 
+            {guests.length > 0 && <div className="space-y-3">
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" aria-label="Select all visible guests" checked={filteredGuests.length > 0 && filteredGuests.every(g=>selectedGuestIds.includes(g.id))} disabled={!filteredGuests.length} onChange={e=>setSelectedGuestIds(prev=>e.target.checked?Array.from(new Set([...prev,...filteredGuests.map(g=>g.id)])):prev.filter(id=>!filteredGuests.some(g=>g.id===id)))}/>Select all visible guests</label>
+              <GuestInvitationActions wedding={wedding} guests={guests.filter(g=>selectedGuestIds.includes(g.id))} onCompleted={async ids=>{setSelectedGuestIds(prev=>prev.filter(id=>!ids.includes(id)));await loadWorkspace();}}/>
+            </div>}
+
             {filteredGuests.length === 0 ? (
               <div className="rounded-xl border border-dashed border-stone-200 p-8 text-center text-xs text-stone-500">
                 {guests.length === 0
@@ -1399,6 +1399,8 @@ export default function HostWeddingWorkspacePage() {
                     key={g.id}
                     className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
+                    <div className="flex items-start gap-3">
+                      <input type="checkbox" className="mt-1" aria-label={`Select ${g.name}`} checked={selectedGuestIds.includes(g.id)} onChange={e=>setSelectedGuestIds(prev=>e.target.checked?[...prev,g.id]:prev.filter(id=>id!==g.id))}/>
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-bold text-stone-900">
@@ -1460,39 +1462,8 @@ export default function HostWeddingWorkspacePage() {
                       )}
                     </div>
 
+                    </div>
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleShareInvite({ guest: g, mode: "copy" })
-                        }
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 transition"
-                      >
-                        {copiedId === g.id ? (
-                          <>
-                            <Check className="h-3.5 w-3.5 text-emerald-600" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5 text-stone-500" />
-                            Copy Personal Link
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWhatsAppGuestId(g.id);
-                          setActiveTab("share");
-                        }}
-                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition"
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                        Share invitation
-                      </button>
-
                       <button
                         type="button"
                         onClick={() => handleDeleteGuest(g.id, g.name)}
@@ -1735,18 +1706,7 @@ export default function HostWeddingWorkspacePage() {
           </div>
 
           <form onSubmit={handleSaveWeddingDetails} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Couple Names *
-              </label>
-              <input
-                type="text"
-                required
-                value={editCoupleNames}
-                onChange={(e) => setEditCoupleNames(e.target.value)}
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2 text-sm focus:border-rose-600 focus:outline-none"
-              />
-            </div>
+
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
                 Event Title *

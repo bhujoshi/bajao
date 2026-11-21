@@ -1,7 +1,7 @@
 "use client";
 
 import CountryPhoneInput from "./CountryPhoneInput";
-import { validateIdentifier, validPhone } from "@/lib/contact-validation";
+import { validateIdentifier } from "@/lib/contact-validation";
 import React, {
   createContext,
   useCallback,
@@ -88,7 +88,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [step, setStep] = useState<"request" | "verify">("request");
   const [identifier, setIdentifier] = useState("");
   const [fullName, setFullName] = useState("");
-  const [secondaryPhone, setSecondaryPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [devCodeHint, setDevCodeHint] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -164,14 +163,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (options?.prefillEmail) {
       setChannel("email");
       setIdentifier(options.prefillEmail);
-      setSecondaryPhone(options?.prefillPhone || "");
     } else if (options?.prefillPhone) {
       setChannel("phone");
       setIdentifier(options.prefillPhone);
     } else {
       setChannel("email");
       setIdentifier("");
-      setSecondaryPhone("");
     }
 
     setModalOpen(true);
@@ -188,7 +185,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const validatedIdentifier = validateIdentifier(identifier, channel);
-      if (channel === "email" && secondaryPhone && !validPhone(secondaryPhone)) throw new Error("Enter a valid optional phone number with its country code.");
       const res = await fetch("/api/auth/otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -232,7 +228,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           channel,
           code: otpCode,
           name: fullName || undefined,
-          phone: channel === "email" ? secondaryPhone || undefined : undefined,
           claimInviteToken: modalOptions.claimInviteToken,
         }),
       });
@@ -399,30 +394,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   />
                 </div>
 
-                {channel === "email" && (
-                  <div>
-                    <label className="block text-xs font-medium text-stone-600 mb-1">
-                      Phone Number (Optional — links phone invitations)
-                    </label>
-                    <CountryPhoneInput label="Optional phone number" value={secondaryPhone} onChange={setSecondaryPhone} />
-                  </div>
-                )}
-
                 <button
                   type="submit"
                   disabled={submitting}
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-700 px-4 py-3 text-xs font-semibold text-white shadow-sm hover:bg-rose-800 disabled:opacity-50 transition"
                 >
                   {submitting
-                    ? "Sending Verification Code..."
-                    : "Send 6-Digit Verification Code"}
+                    ? "Getting Verification Code..."
+                    : "Get 6-Digit Verification Code"}
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </form>
             ) : (
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <div className="rounded-xl bg-stone-50 border border-stone-200 p-3 text-xs text-stone-600">
-                  We sent a 6-digit verification code to{" "}
+                  {devCodeHint ? "Use the dummy verification code shown below for" : "We sent a 6-digit verification code to"}{" "}
                   <strong className="text-stone-900">{identifier}</strong>.
                   <button
                     type="button"
@@ -436,7 +422,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 {devCodeHint && (
                   <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
                     <span className="font-semibold">
-                      Verification Code (Local Mail/SMS Delivery):
+                      Dummy verification code:
                     </span>{" "}
                     <code className="font-mono font-bold text-sm bg-white px-2 py-0.5 rounded border border-amber-300">
                       {devCodeHint}
