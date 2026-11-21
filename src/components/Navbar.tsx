@@ -12,8 +12,8 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-white/95 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3.5">
+    <header className="sticky top-0 z-40 border-b border-rose-100 bg-[#ffffff]/95 backdrop-blur-md">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-700 text-white shadow-sm group-hover:bg-rose-800 transition">
@@ -85,7 +85,7 @@ export function Navbar() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="flex items-center gap-1.5 rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-semibold text-stone-800"
+              aria-label="Open account menu" aria-expanded={mobileMenuOpen} className="flex min-h-11 max-w-[50vw] items-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-stone-800"
             >
               {user.avatarUrl ? <img src={user.avatarUrl} alt="Your profile" className="h-6 w-6 rounded-full object-cover" /> : <span className="h-2 w-2 rounded-full bg-emerald-500" />}
               {user.name.split(" ")[0]}

@@ -1,7 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { Navbar } from "@/components/Navbar";
+
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export const metadata: Metadata = {
   title: "Memorica — Event Invitations & Live Updates",
@@ -16,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen flex flex-col bg-[#fdfbf7] text-stone-900 antialiased">
+      <body className="min-h-screen flex flex-col bg-[#ffffff] text-stone-900 antialiased">
         <AuthProvider>
           <Navbar />
           <main className="flex-1">{children}</main>

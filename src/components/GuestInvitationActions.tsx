@@ -66,14 +66,14 @@ export default function GuestInvitationActions({ wedding, guests, onCompleted }:
   }
 
   return <>
-    {guests.length > 0 && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+    {guests.length > 0 && <div className="guest-selection-bar flex flex-wrap items-center gap-3 rounded-2xl border border-rose-200 bg-[#ffffff] p-3">
       <span className="text-sm font-semibold">{guests.length} guest(s) selected</span>
-      <button type="button" disabled={busy} onClick={() => open("send")} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">Share invitation</button>
+      <button type="button" disabled={busy} onClick={() => open("send")} className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">Share invitation</button>
       <button type="button" disabled={busy} onClick={() => open("copy")} className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40">Copy link{guests.length > 1 ? "s" : ""}</button>
     </div>}
     {notice && !action && <p role="status" className="whitespace-pre-line text-sm text-emerald-800">{notice}</p>}
-    {action && <div role="dialog" aria-modal="true" aria-label="Choose invitation for selected guests" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 space-y-4">
+    {action && <div role="dialog" aria-modal="true" aria-label="Choose invitation for selected guests" className="sheet-overlay fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-950/40 sm:p-4 backdrop-blur-sm">
+      <div className="sheet-panel w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-[#ffffff] p-5 sm:p-6 space-y-4">
         <h2 className="text-xl font-semibold">Which invitation would you like to {action === "send" ? "send" : "copy"}?</h2>
         <p className="text-sm text-stone-600">{action === "send" ? "Send directly from Memorica’s WhatsApp business number to" : "Create personal invitation links for"} {guests.length} selected guest(s).</p>
         <ul className="max-h-32 overflow-y-auto text-sm text-stone-600">{guests.map(guest => <li key={guest.id}>{guest.name} · {guest.phone || "No mobile number"}</li>)}</ul>
@@ -86,7 +86,7 @@ export default function GuestInvitationActions({ wedding, guests, onCompleted }:
           <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={consent} disabled={busy} onChange={e => setConsent(e.target.checked)}/><span>These guests agreed to receive event invitations from Memorica on WhatsApp.</span></label>
         </>}
         {notice && <p role="status" className="whitespace-pre-line text-sm text-stone-700">{notice}</p>}
-        <div className="flex gap-3"><button type="button" disabled={busy} onClick={() => setAction(null)} className="rounded-xl border px-4 py-2">Cancel</button><button type="button" onClick={() => {void complete();}} disabled={busy || !choice || !guests.length || (action === "send" && (!consent || missingPhone))} className="rounded-xl bg-emerald-700 px-4 py-2 font-semibold text-white disabled:opacity-40">{busy ? "Processing…" : action === "send" ? "Send invitation" : "Copy personal links"}</button></div>
+        <div className="sheet-actions flex gap-3"><button type="button" disabled={busy} onClick={() => setAction(null)} className="rounded-xl border px-4 py-2">Cancel</button><button type="button" onClick={() => {void complete();}} disabled={busy || !choice || !guests.length || (action === "send" && (!consent || missingPhone))} className="rounded-xl bg-rose-700 px-4 py-2 font-semibold text-white disabled:opacity-40">{busy ? "Processing…" : action === "send" ? "Send invitation" : "Copy personal links"}</button></div>
       </div>
     </div>}
   </>;

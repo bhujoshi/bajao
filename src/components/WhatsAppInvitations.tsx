@@ -123,7 +123,7 @@ export default function WhatsAppInvitations({wedding,guests,onSent,onWeddingUpda
     {prior && <p className="rounded-xl bg-stone-50 p-3 text-sm">Previous send: <strong>{prior.status==="accepted"?"Accepted by WhatsApp; delivery not confirmed":prior.status}</strong>{prior.error&&` — ${prior.error}`}</p>}
     <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={consent} disabled={busy} onChange={e=>setConsent(e.target.checked)}/><span>This guest agreed to receive event invitations from Memorica on WhatsApp.</span></label>
     <button type="button" disabled={!connection?.ready||!guest?.phone||!choice||!consent||busy||blocked} className="rounded-xl px-4 py-3 bg-emerald-700 text-white font-semibold disabled:opacity-40" onClick={()=>setReview(true)}>Review WhatsApp invitation</button>
-    {review && guest && choice && <div role="dialog" aria-modal="true" aria-label="Confirm WhatsApp invitation" className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-auto space-y-4">
+    {review && guest && choice && <div role="dialog" aria-modal="true" aria-label="Confirm WhatsApp invitation" className="sheet-overlay fixed inset-0 z-50 bg-stone-950/40 flex items-end sm:items-center justify-center sm:p-4"><div className="sheet-panel bg-[#ffffff] rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-lg w-full max-h-[90dvh] overflow-auto space-y-4">
       <h3 className="font-semibold text-lg">Send to {guest.name}?</h3><p className="text-sm">Recipient: {guest.phone}</p>
       {connection?.weddingTemplate ? <div className="rounded-xl bg-emerald-50 p-4 text-sm whitespace-pre-line">{`🌸 Two hearts. One beautiful beginning. 🌸
 

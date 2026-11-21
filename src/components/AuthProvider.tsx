@@ -273,8 +273,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 space-y-5">
+        <div className="sheet-overlay fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-950/40 sm:p-4 backdrop-blur-sm">
+          <div className="sheet-panel relative w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-[#ffffff] p-5 sm:p-6 shadow-2xl border border-rose-100 space-y-5">
             <button
               type="button"
               onClick={closeAuthModal}

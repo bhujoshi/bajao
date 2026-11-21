@@ -1,5 +1,6 @@
 "use client";
 
+import { missingEventDetails } from "@/lib/event-setup";
 import DateInput from "@/components/DateInput";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
@@ -39,6 +40,7 @@ export default function HomePage() {
     refreshAuth,
   } = useAuth();
 
+  const [dashboardView, setDashboardView] = useState("ongoing");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [eventType, setEventType] = useState("Wedding");
   const [eventTitle, setEventTitle] = useState("");
@@ -272,7 +274,7 @@ export default function HomePage() {
 
   // Authenticated User Dashboard (Host & Guest)
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 space-y-8">
+    <div className="celebration-dashboard mx-auto max-w-6xl px-4 py-5 sm:py-8 space-y-6">
       {/* Host Onboarding / Profile Completion Banner */}
       {(!user.onboardingCompleted || editingProfile) && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-5 sm:p-6 shadow-sm space-y-4">
@@ -356,80 +358,27 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Profile Summary Strip */}
-      {user.onboardingCompleted && !editingProfile && (
-        <div className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-800 font-bold text-base">
-              {user.avatarUrl ? <img src={user.avatarUrl} alt={`${user.name} profile photo`} className="h-full w-full rounded-2xl object-cover" /> : user.name.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-base font-bold text-stone-900">
-                  {user.name}
-                </h1>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Verified Account
-                </span>
-              </div>
-              <p className="text-xs text-stone-500 mt-0.5">
-                {user.email && <span>Email: {user.email}</span>}
-                {user.email && user.phone && <span> • </span>}
-                {user.phone ? (
-                  <span>Phone: {user.phone}</span>
-                ) : (
-                  <span className="text-stone-400">No phone number added</span>
-                )}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setProfilePhoto(undefined);
-              setProfileError(null);
-              setProfileName(user.name);
-              setProfilePhone(user.phone || "");
-              setEditingProfile(true);
-            }}
-            className="self-start sm:self-auto rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2 text-xs font-medium text-stone-700 hover:bg-stone-100 transition"
-          >
-            Edit Profile / Contact Info
-          </button>
+      {user.onboardingCompleted && !editingProfile && <section className="dashboard-welcome">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-white bg-rose-100 font-serif text-xl text-rose-800 shadow-sm">{user.avatarUrl ? <img src={user.avatarUrl} alt="Your profile" className="h-full w-full rounded-full object-cover"/> : user.name.charAt(0).toUpperCase()}</div>
+          <div className="min-w-0"><p className="text-xs text-rose-700">A little planning. A lot of memories.</p><h1 className="font-serif text-2xl sm:text-3xl truncate">Hello, {user.name.split(" ")[0]}</h1></div>
         </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-        {eventGroups.map(group => <section key={group.id} className="rounded-2xl border border-stone-200 bg-white p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-serif text-lg font-bold text-stone-900">{group.title}</h2>
-            <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800">{group.events.length}</span>
-          </div>
-          {group.events.length ? <div className="space-y-2 max-h-80 overflow-y-auto">{group.events.map(w => <div key={w.id} className="rounded-xl bg-stone-50 p-3 space-y-2">
-            <h3 className="text-sm font-semibold">{w.coupleNames ? `${w.coupleNames} — ${w.eventTitle}` : w.eventTitle}</h3>
-            <p className="text-xs text-stone-500">{formatWeddingDateRange(w.date,w.endDate)} · {w.venue}</p>
-            <p className="text-xs text-stone-600">{w.stats.totalGuests} guests · {w.stats.yesCount} attending{w.stats.conflictCount > 0 && ` · ${w.stats.conflictCount} guest conflicts to review`}</p>
-            <div className="flex flex-wrap gap-3 text-xs"><Link className="font-semibold text-rose-700 underline" href={`/host/weddings/${w.id}`}>Manage Event</Link><Link className="text-stone-600 underline" href={`/invite/${w.slug}`}>View invitation</Link></div>
-          </div>)}</div> : <p className="text-sm text-stone-500">{group.id === "ongoing" ? "No ongoing events." : group.id === "upcoming" ? "No upcoming events." : "No previously hosted events yet."}</p>}
-          {group.id === "ongoing" && <button type="button" onClick={()=>setCreateModalOpen(true)} className="rounded-xl bg-rose-700 px-4 py-2 text-xs font-semibold text-white">+ Create an Event</button>}
-        </section>)}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-lg font-bold">Events you are invited to</h2><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold">{invitedWeddings.length}</span></div>
-          {invitedWeddings.length ? <div className="space-y-2 max-h-80 overflow-y-auto">{invitedWeddings.map(w=><div key={w.id} className="rounded-xl bg-stone-50 p-3 space-y-2">
-            <h3 className="text-sm font-semibold">{w.coupleNames ? `${w.coupleNames} — ${w.eventTitle}` : w.eventTitle}</h3>
-            <p className="text-xs text-stone-500">{formatWeddingDateRange(w.date,w.endDate)} · {w.venue}</p>
-            <p className="text-xs text-stone-600">RSVP: {w.myRsvpStatus}</p>
-            <div className="flex flex-wrap gap-3 text-xs"><Link className="font-semibold text-rose-700 underline" href={w.myInviteToken ? `/invite/${w.slug}?guest=${w.myInviteToken}` : `/invite/${w.slug}`}>View invitation / RSVP</Link><Link className="text-stone-600 underline" href={`/events/${w.slug}/updates`}>Live updates ({w.updatesCount})</Link></div>
-          </div>)}</div> : <p className="text-sm text-stone-500">No event invitations yet.</p>}
-        </section>
+        <button type="button" onClick={()=>{setProfilePhoto(undefined);setProfileError(null);setProfileName(user.name);setProfilePhone(user.phone || "");setEditingProfile(true);}} className="mt-4 inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-rose-800 underline underline-offset-4">Edit profile <CheckCircle2 size={14}/><span className="font-normal text-stone-500 no-underline">Verified account</span></button>
+        <Heart className="welcome-flower" aria-hidden="true"/>
+      </section>}
+      <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-700">YOUR MEMORIES START HERE</p><h2 className="font-serif text-2xl sm:text-3xl">My celebrations</h2></div><button type="button" onClick={()=>setCreateModalOpen(true)} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm"><Plus size={17}/>Create event</button></div>
+      <div role="group" aria-label="Event groups" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[...eventGroups.map(group=>({id:group.id,title:group.id==='past'?'Previously hosted':group.id==='ongoing'?'Ongoing':'Upcoming',count:group.events.length,icon:group.id==='ongoing'?Sparkles:group.id==='upcoming'?Calendar:Heart})),{id:'invited',title:'Invited to',count:invitedWeddings.length,icon:BookUser}].map(group=>{const Icon=group.icon;return <button type="button" key={group.id} aria-pressed={dashboardView===group.id} onClick={()=>setDashboardView(group.id)} className={`event-widget ${dashboardView===group.id?'is-active':''}`}><div className="flex items-center justify-between"><span className="widget-icon"><Icon size={19}/></span><span className="font-serif text-3xl">{group.count}</span></div><span className="mt-3 block text-sm font-semibold">{group.title}</span><span className="mt-0.5 block text-[11px] opacity-75">{group.id==='ongoing'?'Happening now':group.id==='upcoming'?'Looking forward':group.id==='past'?'Memories to revisit':'You’re on the guest list'}</span></button>})}
       </div>
+      <section aria-live="polite" className="space-y-3">
+        <div className="flex items-center justify-between"><h2 className="font-serif text-xl">{dashboardView==='invited'?'Your invitations':eventGroups.find(group=>group.id===dashboardView)?.title}</h2><span className="text-xs text-stone-500">{dashboardView==='invited'?invitedWeddings.length:eventGroups.find(group=>group.id===dashboardView)?.events.length} events</span></div>
+        {dashboardView==='invited' ? invitedWeddings.length ? invitedWeddings.map(w=><article key={w.id} className="celebration-card"><span className="text-[10px] uppercase tracking-wider text-rose-700">YOU’RE INVITED · RSVP: {w.myRsvpStatus}</span><h3 className="font-serif text-2xl mt-2">{w.coupleNames || w.eventTitle}</h3><p className="text-sm text-stone-500 mt-2">{formatWeddingDateRange(w.date,w.endDate)} · {w.venue}</p><div className="mt-5 flex flex-wrap gap-3"><Link className="card-primary" href={w.myInviteToken?`/invite/${w.slug}?guest=${w.myInviteToken}`:`/invite/${w.slug}`}>View invitation & RSVP <ArrowRight size={16}/></Link><Link className="card-secondary" href={`/events/${w.slug}/updates`}>Live updates</Link></div></article>) : <div className="celebration-empty"><BookUser size={26}/><h3>Your next invitation awaits</h3><p>Events you’re invited to will appear here.</p></div> : (()=>{const group=eventGroups.find(item=>item.id===dashboardView)!;return group.events.length ? group.events.map(w=>{const remaining=missingEventDetails(w);return <article key={w.id} className="celebration-card"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-rose-700"><Heart size={12}/> Wedding <span className="ml-auto rounded-full bg-rose-50 px-2.5 py-1">{remaining.length?'Setup in progress':group.id==='past'?'Memories saved':'Ready to celebrate'}</span></div><h3 className="font-serif text-2xl sm:text-3xl mt-3">{w.coupleNames || w.eventTitle}</h3>{w.coupleNames&&<p className="text-xs text-stone-500 mt-1">{w.eventTitle}</p>}<div className="mt-4 space-y-2 text-sm text-stone-600"><p className="flex items-start gap-2"><Calendar size={16} className="shrink-0 text-rose-600 mt-0.5"/>{formatWeddingDateRange(w.date,w.endDate)}</p><p className="flex items-start gap-2"><MapPin size={16} className="shrink-0 text-rose-600 mt-0.5"/>{w.venue}</p></div><div className="mt-4 border-t border-rose-100 pt-3 text-xs text-stone-500">{w.stats.totalGuests} guests · {w.stats.yesCount} attending{w.stats.conflictCount>0&&` · ${w.stats.conflictCount} conflicts to review`}</div><div className="mt-4 flex flex-wrap gap-3"><Link className="card-primary" href={`/host/weddings/${w.id}`}>{remaining.length?'Continue setup':'Manage event'}<ArrowRight size={16}/></Link>{!remaining.length&&<Link className="card-secondary" href={`/invite/${w.slug}`}>View invitation</Link>}</div></article>}) : <div className="celebration-empty"><Heart size={26}/><h3>{group.id==='ongoing'?'A little quiet, for now':group.id==='upcoming'?'Something lovely to look forward to':'Beautiful memories belong here'}</h3><p>{group.id==='past'?'Your hosted celebrations will be saved here.':'Start planning your next celebration.'}</p><button type="button" className="card-primary mx-auto mt-4" onClick={()=>setCreateModalOpen(true)}><Plus size={16}/>Create an event</button></div>})()}
+      </section>
 
       {/* Create Event Modal */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-stone-200 space-y-4 overflow-hidden">
+        <div className="sheet-overlay fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-950/40 sm:p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="sheet-panel w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-[#ffffff] p-5 sm:p-6 shadow-2xl border border-rose-100 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <div>
                 <h3 className="font-serif text-xl font-bold text-stone-900">

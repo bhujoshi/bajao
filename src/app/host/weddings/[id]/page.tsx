@@ -1,4 +1,5 @@
 "use client";
+import MobileEventNav from "@/components/MobileEventNav";
 import GuestInvitationActions from "@/components/GuestInvitationActions";
 import WhatsAppInvitations from "@/components/WhatsAppInvitations";
 import EventCreatedCelebration from "@/components/EventCreatedCelebration";
@@ -799,10 +800,10 @@ export default function HostWeddingWorkspacePage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8 space-y-6">
+    <div className={`event-workspace mx-auto max-w-6xl px-4 pt-5 sm:py-8 space-y-5 ${activeTab === "guests" && selectedGuestIds.length ? "pb-56" : "pb-28"}`}>
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-50 max-w-md rounded-2xl border p-4 shadow-xl flex items-start gap-3 transition-all ${
+          className={`fixed bottom-28 left-4 right-4 sm:bottom-5 sm:left-auto sm:right-5 z-[70] max-w-md rounded-2xl border p-4 shadow-xl flex items-start gap-3 transition-all ${
             toast.type === "success"
               ? "bg-emerald-950 text-white border-emerald-700"
               : toast.type === "error"
@@ -823,8 +824,9 @@ export default function HostWeddingWorkspacePage() {
       )}
 
       <EventCreatedCelebration eventId={wedding.id} />
+      <MobileEventNav active={activeTab} ready={!missingEventDetails(wedding).length} onSelect={setActiveTab}/>
       {/* Header Banner */}
-      <div className="rounded-3xl bg-white border border-stone-200 p-5 sm:p-6 shadow-sm space-y-4">
+      <div className="event-hero rounded-3xl border border-rose-200 p-4 sm:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -832,7 +834,7 @@ export default function HostWeddingWorkspacePage() {
                 <Sparkles className="h-3 w-3" />
                 {wedding.eventType === "Other" ? wedding.otherEventType : wedding.eventType} · Host Dashboard
               </span>
-              <span className="text-xs text-stone-400 font-mono">
+              <span className="hidden sm:inline text-xs text-stone-400 font-mono">
                 /invite/{wedding.slug}
               </span>
             </div>
@@ -871,7 +873,7 @@ export default function HostWeddingWorkspacePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-stone-100">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-3 border-t border-rose-100">
           <div className="rounded-xl bg-stone-50 px-3.5 py-2.5 border border-stone-200/70">
             <div className="text-[11px] text-stone-500">Invitation List</div>
             <div className="text-lg font-bold text-stone-900">
@@ -894,13 +896,13 @@ export default function HostWeddingWorkspacePage() {
               {stats.maybe}
             </div>
           </div>
-          <div className="rounded-xl bg-rose-50/70 px-3.5 py-2.5 border border-rose-200/70">
+          <div className="hidden sm:block rounded-xl bg-rose-50/70 px-3.5 py-2.5 border border-rose-200/70">
             <div className="text-[11px] text-rose-700 font-medium">
               Declined (No)
             </div>
             <div className="text-lg font-bold text-rose-900">{stats.no}</div>
           </div>
-          <div className="rounded-xl bg-stone-50 px-3.5 py-2.5 border border-stone-200/70 col-span-2 sm:col-span-1">
+          <div className="rounded-xl bg-stone-50 px-3.5 py-2.5 border border-stone-200/70 hidden sm:block">
             <div className="text-[11px] text-stone-500">
               Registered for Updates
             </div>
@@ -910,7 +912,7 @@ export default function HostWeddingWorkspacePage() {
           </div>
         </div>
 
-        <div className="flex overflow-x-auto gap-1.5 pt-2 border-t border-stone-100 no-scrollbar">
+        <div className="hidden sm:flex overflow-x-auto gap-1.5 pt-2 border-t border-stone-100 no-scrollbar">
           {[
             { id: "setup" as HostTab, label: "Complete Event Details", icon: Edit3, badge: null },
             {
@@ -980,7 +982,7 @@ export default function HostWeddingWorkspacePage() {
         <div className="space-y-6">
           {conflictGuests.length > 0 && (
             <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/90 p-5 space-y-4 shadow-sm">
-              <div className="flex items-start gap-3">
+              <div className="flex min-w-0 items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
                 <div>
                   <h3 className="text-sm font-bold text-amber-950">
@@ -1231,8 +1233,8 @@ export default function HostWeddingWorkspacePage() {
 
           {/* Contact Import Review Staging Modal */}
           {importPreview && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-              <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="sheet-overlay fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-stone-950/40 sm:p-4 backdrop-blur-sm">
+              <div className="sheet-panel w-full max-w-2xl rounded-t-3xl sm:rounded-3xl bg-[#ffffff] p-5 sm:p-6 shadow-2xl border border-rose-100 space-y-4 max-h-[90dvh] flex flex-col">
                 <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                   <div>
                     <h3 className="font-serif text-lg font-bold text-stone-900">
@@ -1265,7 +1267,7 @@ export default function HostWeddingWorkspacePage() {
                           : "border-stone-200 bg-white"
                       }`}
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
                         <input
                           type="checkbox"
                           checked={item.selected}
@@ -1340,7 +1342,7 @@ export default function HostWeddingWorkspacePage() {
           {/* Guest List Search, Filter & Table */}
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="relative flex-1 max-w-sm">
+              <div className="relative flex-1 w-full sm:max-w-sm">
                 <Search className="h-4 w-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
@@ -1411,10 +1413,10 @@ export default function HostWeddingWorkspacePage() {
                 {filteredGuests.map((g) => (
                   <div
                     key={g.id}
-                    className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    className="guest-row py-4 flex flex-row items-start sm:items-center justify-between gap-3"
                   >
-                    <div className="flex items-start gap-3">
-                      <input type="checkbox" className="mt-1" aria-label={`Select ${g.name}`} checked={selectedGuestIds.includes(g.id)} onChange={e=>setSelectedGuestIds(prev=>e.target.checked?[...prev,g.id]:prev.filter(id=>id!==g.id))}/>
+                    <div className="flex min-w-0 items-start gap-3">
+                      <label className="flex h-11 w-9 shrink-0 items-start justify-center pt-1"><input type="checkbox" className="h-5 w-5 accent-rose-700" aria-label={`Select ${g.name}`} checked={selectedGuestIds.includes(g.id)} onChange={e=>setSelectedGuestIds(prev=>e.target.checked?[...prev,g.id]:prev.filter(id=>id!==g.id))}/></label>
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-bold text-stone-900">
@@ -1505,7 +1507,7 @@ export default function HostWeddingWorkspacePage() {
           <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"whatsapp"})}>Open WhatsApp</button>
         </div></section>}
       </div>}
-      {shareRequest && <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Choose invitation card"><div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-auto space-y-4">
+      {shareRequest && <div className="sheet-overlay fixed inset-0 z-50 bg-stone-950/40 flex items-end sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true" aria-label="Choose invitation card"><div className="sheet-panel bg-[#ffffff] rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-lg w-full max-h-[90dvh] overflow-auto space-y-4">
         <h2 className="text-xl font-semibold">Which invitation would you like to share?</h2>
         <label className="block">Event invitation<select className="mt-2 w-full rounded-xl border p-3" value={shareInvitationKey} onChange={e => setShareInvitationKey(e.target.value)}><option value="">Choose an event or sub-event</option>{invitationOptions(wedding).map(o => <option key={o.key} value={o.key}>{o.title}</option>)}</select></label>
         {invitationOptions(wedding).filter(o => o.key === shareInvitationKey).map(o => <MediaPreview key={o.key} asset={o.card} />)}
