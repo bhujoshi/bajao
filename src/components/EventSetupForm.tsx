@@ -1,6 +1,7 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { WeddingDTO } from "@/lib/types";
+import React, { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { WeddingDTO, encodeUserHintHeader } from "@/lib/types";
 import { EventMedia, SubEvent, missingEventDetails } from "@/lib/event-setup";
 import DateInput from "./DateInput";
 export function MediaPreview({ asset }: { asset: EventMedia }) {
@@ -12,13 +13,30 @@ export function MediaPreview({ asset }: { asset: EventMedia }) {
 export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mode = "details" }: {
   wedding: WeddingDTO; onSaved: (event: WeddingDTO) => void; onInvite: () => void; onNext?: () => void; mode?: "details" | "invitations";
 }) {
+  const { user } = useAuth();
   const [setup, setSetup] = useState(wedding.setup);
   const [message, setMessage] = useState(wedding.description || "");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState(false);
-  useEffect(() => { setSetup(wedding.setup); setMessage(wedding.description || ""); }, [wedding]);
+  const prevWeddingId = useRef(wedding.id);
+  const prevDescription = useRef(wedding.description || "");
+  useEffect(() => {
+    const nextDescription = wedding.description || "";
+    if (prevWeddingId.current !== wedding.id) {
+      prevWeddingId.current = wedding.id;
+      prevDescription.current = nextDescription;
+      setSetup(wedding.setup);
+      setMessage(nextDescription);
+      return;
+    }
+    if (prevDescription.current !== nextDescription) {
+      prevDescription.current = nextDescription;
+      setMessage(nextDescription);
+    }
+    setSetup(prev => mode === "details" ? wedding.setup : { ...prev, groomName: wedding.setup.groomName, brideName: wedding.setup.brideName });
+  }, [wedding, mode]);
   const missing = missingEventDetails({ ...wedding, setup, description: message });
   const isWedding = wedding.eventType === "Wedding";
   const inputClass = "mt-1 block w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm focus:border-rose-600 focus:outline-none";
@@ -34,7 +52,7 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
         if (target === "photos" && !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) throw new Error("Choose JPG, PNG, WebP or GIF couple photos.");
         if (file.size > 20*1024*1024) throw new Error("Each file must be under 20 MB.");
         const form = new FormData(); form.append("file", file);
-        const response = await fetch(`/api/weddings/${wedding.id}/media`, {method:"POST", body:form});
+        const response = await fetch(`/api/weddings/${wedding.id}/media`, {method:"POST", credentials:"same-origin", headers:{...encodeUserHintHeader(user)}, body:form});
         const data = await response.json(); if (!response.ok) throw new Error(data.error);
         assets.push(data.asset);
       }
@@ -46,7 +64,8 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
   async function save(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setNotice(""); setError(false);
     try {
-      const response = await fetch(`/api/weddings/${wedding.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({setup,...(mode === "invitations" ? {description:message} : {})})});
+      const payloadSetup = mode === "invitations" ? { ...setup, groomName: wedding.setup.groomName, brideName: wedding.setup.brideName } : setup;
+      const response = await fetch(`/api/weddings/${wedding.id}`,{method:"PATCH",credentials:"same-origin",headers:{"Content-Type":"application/json",...encodeUserHintHeader(user)},body:JSON.stringify({setup:payloadSetup,...(mode === "invitations" ? {description:message} : {})})});
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
       onSaved(data.wedding);
       if (mode === "details") { onNext?.(); return; }
@@ -72,8 +91,8 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
     {mode === "details" && <>
       {isWedding && <section className="rounded-2xl border bg-white p-6 space-y-5">
         <h3 className="font-serif text-xl font-bold">The couple & their families</h3>
-        <div className="grid sm:grid-cols-2 gap-4">{([['groomName','Groom’s name'],['brideName','Bride’s name']] as const).map(([key,label])=><label key={key} className="text-sm font-medium">{label}<input value={setup[key]} maxLength={160} onChange={e=>setSetup({...setup,[key]:e.target.value})} className={inputClass}/></label>)}</div>
-        <p className="text-sm text-stone-600">Groom and bride names are required for the wedding WhatsApp invitation.</p>
+        <div className="grid sm:grid-cols-2 gap-4">{([['groomName','Groom’s name'],['brideName','Bride’s name']] as const).map(([key,label])=><label key={key} className="text-sm font-medium">{label}{!setup[key].trim() && <span className="text-xs font-normal text-amber-700"> (needed for WhatsApp)</span>}<input value={setup[key]} maxLength={160} placeholder={key==='groomName'?'e.g. Arjun':'e.g. Meera'} onChange={e=>setSetup({...setup,[key]:e.target.value})} className={inputClass}/></label>)}</div>
+        <p className={`text-sm ${!setup.groomName.trim()||!setup.brideName.trim() ? "text-amber-800 font-medium" : "text-stone-600"}`}>Groom and bride names are required for the wedding WhatsApp invitation.</p>
         <p className="text-sm text-stone-600">{wedding.coupleNames} · Enter the family names in the same partner order.</p>
         <div className="grid sm:grid-cols-2 gap-4">{([['partnerOneMother','First partner’s mother'],['partnerOneFather','First partner’s father'],['partnerTwoMother','Second partner’s mother'],['partnerTwoFather','Second partner’s father'],['coupleHashtag','Wedding hashtag for the couple'],['otherHashtags','Other wedding hashtags']] as const).map(([key,label])=><label key={key} className="text-sm font-medium">{label} *<input value={setup[key]} maxLength={500} onChange={e=>setSetup({...setup,[key]:e.target.value})} placeholder={key.includes('Hashtag')?'#TogetherForever':'Full name'} className={inputClass}/></label>)}</div>
       </section>}

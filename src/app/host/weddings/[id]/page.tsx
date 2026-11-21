@@ -92,6 +92,8 @@ export default function HostWeddingWorkspacePage() {
 
   // Event details edit form state
   const [editCoupleNames, setEditCoupleNames] = useState("");
+  const [editGroomName, setEditGroomName] = useState("");
+  const [editBrideName, setEditBrideName] = useState("");
   const [editEventTitle, setEditEventTitle] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
@@ -99,6 +101,22 @@ export default function HostWeddingWorkspacePage() {
   const [editDescription, setEditDescription] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
   const [savingCardMessage, setSavingCardMessage] = useState(false);
+
+  const syncUpdatedWedding = useCallback((updated: WeddingDTO) => {
+    setWedding(updated);
+    setEditCoupleNames(updated.coupleNames);
+    setEditGroomName(updated.setup.groomName);
+    setEditBrideName(updated.setup.brideName);
+    setEditEventTitle(updated.eventTitle);
+    setEditDate(new Date(updated.date).toISOString().slice(0, 10));
+    setEditEndDate(
+      updated.endDate
+        ? new Date(updated.endDate).toISOString().slice(0, 10)
+        : new Date(updated.date).toISOString().slice(0, 10)
+    );
+    setEditVenue(updated.venue);
+    setEditDescription(updated.description || "");
+  }, []);
 
   // Manual guest entry state
   const [manualName, setManualName] = useState("");
@@ -168,27 +186,16 @@ export default function HostWeddingWorkspacePage() {
         return;
       }
 
-      setWedding(data.wedding);
+      syncUpdatedWedding(data.wedding);
       setGuests(data.guests || []);
       setUpdates(data.updates || []);
       setAnalytics(data.analytics || []);
-
-      setEditCoupleNames(data.wedding.coupleNames);
-      setEditEventTitle(data.wedding.eventTitle);
-      setEditDate(new Date(data.wedding.date).toISOString().slice(0, 10));
-      setEditEndDate(
-        data.wedding.endDate
-          ? new Date(data.wedding.endDate).toISOString().slice(0, 10)
-          : new Date(data.wedding.date).toISOString().slice(0, 10)
-      );
-      setEditVenue(data.wedding.venue);
-      setEditDescription(data.wedding.description || "");
     } catch {
       setAccessError("Failed to load wedding workspace.");
     } finally {
       setLoading(false);
     }
-  }, [params.id, user]);
+  }, [params.id, user, syncUpdatedWedding]);
 
   useEffect(() => {
     loadWorkspace();
@@ -221,6 +228,9 @@ export default function HostWeddingWorkspacePage() {
         },
         body: JSON.stringify({
           coupleNames: editCoupleNames,
+          ...(wedding.eventType === "Wedding"
+            ? { groomName: editGroomName, brideName: editBrideName }
+            : {}),
           eventTitle: editEventTitle,
           date: startObj.toISOString(),
           endDate: endObj.toISOString(),
@@ -229,7 +239,7 @@ export default function HostWeddingWorkspacePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update details");
-      setWedding(data.wedding);
+      syncUpdatedWedding(data.wedding);
       await refreshAuth();
       showToast("success", "Wedding details updated.");
     } catch (err) {
@@ -964,7 +974,7 @@ export default function HostWeddingWorkspacePage() {
         </div>
       </div>
 
-      {activeTab === "setup" && <EventSetupForm key={wedding.id} wedding={wedding} onNext={() => setActiveTab("share")} onInvite={() => setActiveTab("guests")} onSaved={updated => {setWedding(updated); setEditDescription(updated.description || "");}} />}
+      {activeTab === "setup" && <EventSetupForm key={wedding.id} wedding={wedding} onNext={() => setActiveTab("share")} onInvite={() => setActiveTab("guests")} onSaved={syncUpdatedWedding} />}
       {activeTab !== "setup" && missingEventDetails(wedding).length > 0 && <div className="rounded-2xl bg-amber-50 border border-amber-200 p-5 text-sm">Complete the event details, invitation message and card, and couple photos before inviting contacts. <button onClick={()=>setActiveTab("setup")} className="underline font-semibold">Complete event details</button></div>}
       {/* TAB 1: GUEST LIST & CONTACT IMPORT */}
       {activeTab === "guests" && !missingEventDetails(wedding).length && (
@@ -1512,8 +1522,8 @@ export default function HostWeddingWorkspacePage() {
 
       {/* TAB 2: INVITATION MESSAGE / CARD & SHARE INVITATIONS */}
       {activeTab === "share" && <div className="space-y-6">
-        <WhatsAppInvitations key={`${wedding.id}:${whatsAppGuestId}`} wedding={wedding} guests={guests} initialGuestId={whatsAppGuestId} onSent={loadWorkspace} />
-        <EventSetupForm mode="invitations" wedding={wedding} onSaved={updated => {setWedding(updated); setEditDescription(updated.description || "");}} onInvite={() => setActiveTab("guests")} />
+        <WhatsAppInvitations key={`${wedding.id}:${whatsAppGuestId}`} wedding={wedding} guests={guests} initialGuestId={whatsAppGuestId} onSent={loadWorkspace} onWeddingUpdated={syncUpdatedWedding} onOpenSetup={() => setActiveTab("setup")} />
+        <EventSetupForm mode="invitations" wedding={wedding} onSaved={syncUpdatedWedding} onInvite={() => setActiveTab("guests")} />
         {!missingEventDetails(wedding).length && <section className="rounded-2xl bg-white border p-6"><h2 className="font-semibold mb-4">Share your invitation</h2><div className="flex flex-wrap gap-3">
           <button className="rounded-xl bg-rose-700 text-white px-4 py-3" onClick={() => handleShareInvite({mode:"copy"})}>Choose card & copy link</button>
           <button className="rounded-xl border px-4 py-3" onClick={() => handleShareInvite({mode:"web_share"})}>Share using device</button>
@@ -1747,6 +1757,36 @@ export default function HostWeddingWorkspacePage() {
                 className="w-full rounded-xl border border-stone-300 px-3.5 py-2 text-sm focus:border-rose-600 focus:outline-none"
               />
             </div>
+            {wedding.eventType === "Wedding" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Groom’s name (for WhatsApp)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={160}
+                    placeholder="e.g. Arjun"
+                    value={editGroomName}
+                    onChange={(e) => setEditGroomName(e.target.value)}
+                    className="w-full rounded-xl border border-stone-300 px-3.5 py-2 text-sm focus:border-rose-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Bride’s name (for WhatsApp)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={160}
+                    placeholder="e.g. Meera"
+                    value={editBrideName}
+                    onChange={(e) => setEditBrideName(e.target.value)}
+                    className="w-full rounded-xl border border-stone-300 px-3.5 py-2 text-sm focus:border-rose-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
                 Event Title *

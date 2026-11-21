@@ -1,9 +1,10 @@
 import { validateIdentifier } from "./contact-validation";
+import { parseEventSetup } from "./event-setup";
 import crypto from "crypto";
 import { cookies, headers } from "next/headers";
 import { prisma } from "./prisma";
 import { mapUserToDTO, normalizeEmail, normalizePhone } from "./db";
-import { UserDTO, WeddingDTO } from "./types";
+import { UserDTO } from "./types";
 
 export const SESSION_COOKIE_NAME = "wm_prod_session";
 export const OTP_CHALLENGE_COOKIE_NAME = "wm_otp_challenge";
@@ -73,6 +74,41 @@ async function ensureUserInDatabase(userDto: UserDTO) {
   });
 }
 
+interface BackupWeddingRecord {
+  id: string;
+  slug: string;
+  ownerUserId: string;
+  eventType: string;
+  otherEventType: string;
+  setupDetails?: string;
+  setupFull?: boolean;
+  eventTitle: string;
+  coupleNames: string;
+  date: string;
+  endDate: string | null;
+  venue: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function signBackupPayload(user: UserDTO, weddings: BackupWeddingRecord[]): string {
+  const payloadB64 = Buffer.from(
+    JSON.stringify({ user, weddings }),
+    "utf-8"
+  ).toString("base64url");
+  const sig = signPayloadHmac(payloadB64);
+  return `${payloadB64}.${sig}`;
+}
+
+function compactSetupDetailsJson(raw: string): string {
+  const parsed = parseEventSetup(raw);
+  return JSON.stringify({
+    groomName: parsed.groomName,
+    brideName: parsed.brideName,
+  });
+}
+
 export async function hydrateBackupWeddingsFromCookie(): Promise<void> {
   try {
     const cookieStore = cookies();
@@ -88,7 +124,7 @@ export async function hydrateBackupWeddingsFromCookie(): Promise<void> {
       Buffer.from(payloadB64, "base64url").toString("utf-8")
     ) as {
       user: UserDTO;
-      weddings: WeddingDTO[];
+      weddings: BackupWeddingRecord[];
     };
 
     if (!parsed?.user?.id || !Array.isArray(parsed.weddings)) return;
@@ -97,10 +133,23 @@ export async function hydrateBackupWeddingsFromCookie(): Promise<void> {
 
     for (const w of parsed.weddings) {
       if (!w.id || !w.slug) continue;
+      const incomingCreatedAt = w.createdAt ? new Date(w.createdAt) : null;
+      const incomingUpdatedAt = w.updatedAt ? new Date(w.updatedAt) : null;
+      const validCreated = Boolean(
+        incomingCreatedAt && Number.isFinite(incomingCreatedAt.getTime())
+      );
+      const validUpdated = Boolean(
+        incomingUpdatedAt && Number.isFinite(incomingUpdatedAt.getTime())
+      );
+
       const existingWedding = await prisma.wedding.findFirst({
         where: { OR: [{ id: w.id }, { slug: w.slug }] },
       });
       if (!existingWedding) {
+        const setupDetails =
+          typeof w.setupDetails === "string"
+            ? JSON.stringify(parseEventSetup(w.setupDetails))
+            : "{}";
         await prisma.wedding.create({
           data: {
             id: w.id,
@@ -108,12 +157,15 @@ export async function hydrateBackupWeddingsFromCookie(): Promise<void> {
             ownerUserId: dbUser.id,
             eventType: w.eventType || "Wedding",
             otherEventType: w.otherEventType || "",
+            setupDetails,
             eventTitle: w.eventTitle,
             coupleNames: w.coupleNames,
             date: new Date(w.date),
             endDate: w.endDate ? new Date(w.endDate) : null,
             venue: w.venue,
             description: w.description || null,
+            ...(validCreated && incomingCreatedAt ? { createdAt: incomingCreatedAt } : {}),
+            ...(validUpdated && incomingUpdatedAt ? { updatedAt: incomingUpdatedAt } : {}),
           },
         });
         await prisma.eventMembership
@@ -136,6 +188,39 @@ export async function hydrateBackupWeddingsFromCookie(): Promise<void> {
             },
           })
           .catch(() => null);
+      } else if (
+        existingWedding.ownerUserId === dbUser.id &&
+        validUpdated &&
+        incomingUpdatedAt &&
+        incomingUpdatedAt.getTime() > existingWedding.updatedAt.getTime()
+      ) {
+        let setupDetails = existingWedding.setupDetails;
+        if (typeof w.setupDetails === "string") {
+          const incomingSetup = parseEventSetup(w.setupDetails);
+          if (w.setupFull) {
+            setupDetails = JSON.stringify(incomingSetup);
+          } else {
+            const currentSetup = parseEventSetup(existingWedding.setupDetails);
+            currentSetup.groomName = incomingSetup.groomName;
+            currentSetup.brideName = incomingSetup.brideName;
+            setupDetails = JSON.stringify(currentSetup);
+          }
+        }
+        await prisma.wedding.update({
+          where: { id: existingWedding.id },
+          data: {
+            eventType: w.eventType || existingWedding.eventType,
+            otherEventType: w.otherEventType ?? existingWedding.otherEventType,
+            setupDetails,
+            eventTitle: w.eventTitle,
+            coupleNames: w.coupleNames,
+            date: new Date(w.date),
+            endDate: w.endDate ? new Date(w.endDate) : null,
+            venue: w.venue,
+            description: w.description ?? existingWedding.description,
+            updatedAt: incomingUpdatedAt,
+          },
+        });
       }
     }
   } catch {
@@ -151,32 +236,59 @@ export async function buildWeddingsBackupCookieValue(
     if (!user) return null;
     const rows = await prisma.wedding.findMany({
       where: { ownerUserId: user.id },
-      orderBy: { createdAt: "desc" },
+      orderBy: { updatedAt: "desc" },
       take: 6,
     });
-    const payload = {
-      user: mapUserToDTO(user),
-      weddings: rows.map((w) => ({
-        id: w.id,
-        slug: w.slug,
-        ownerUserId: w.ownerUserId,
-        eventType: w.eventType,
-        otherEventType: w.otherEventType,
-        eventTitle: w.eventTitle,
-        coupleNames: w.coupleNames,
-        date: w.date.toISOString(),
-        endDate: w.endDate ? w.endDate.toISOString() : null,
-        venue: w.venue,
-        description: w.description,
-        createdAt: w.createdAt.toISOString(),
-        updatedAt: w.updatedAt.toISOString(),
+    const userDto = mapUserToDTO(user);
+    const baseRecords: BackupWeddingRecord[] = rows.map((w) => ({
+      id: w.id,
+      slug: w.slug,
+      ownerUserId: w.ownerUserId,
+      eventType: w.eventType,
+      otherEventType: w.otherEventType,
+      setupDetails: w.setupDetails,
+      setupFull: true,
+      eventTitle: w.eventTitle,
+      coupleNames: w.coupleNames,
+      date: w.date.toISOString(),
+      endDate: w.endDate ? w.endDate.toISOString() : null,
+      venue: w.venue,
+      description: w.description,
+      createdAt: w.createdAt.toISOString(),
+      updatedAt: w.updatedAt.toISOString(),
+    }));
+
+    // Keep signed cookie well under the 4096-byte browser cookie limit.
+    const MAX_COOKIE_BYTES = 3600;
+    const candidates: BackupWeddingRecord[][] = [
+      baseRecords,
+      baseRecords.map((r, i) =>
+        i === 0 ? r : { ...r, setupDetails: compactSetupDetailsJson(r.setupDetails || "{}"), setupFull: false }
+      ),
+      baseRecords.map((r) => ({
+        ...r,
+        setupDetails: compactSetupDetailsJson(r.setupDetails || "{}"),
+        setupFull: false,
       })),
-    };
-    const payloadB64 = Buffer.from(JSON.stringify(payload), "utf-8").toString(
-      "base64url"
+    ];
+    for (let count = baseRecords.length; count >= 1; count--) {
+      candidates.push(
+        baseRecords.slice(0, count).map((r) => ({
+          ...r,
+          setupDetails: compactSetupDetailsJson(r.setupDetails || "{}"),
+          setupFull: false,
+        }))
+      );
+    }
+    candidates.push(
+      baseRecords.map(({ setupDetails: _sd, setupFull: _sf, ...rest }) => rest)
     );
-    const sig = signPayloadHmac(payloadB64);
-    return `${payloadB64}.${sig}`;
+
+    for (const candidate of candidates) {
+      const signed = signBackupPayload(userDto, candidate);
+      if (signed.length <= MAX_COOKIE_BYTES) return signed;
+    }
+    return signBackupPayload(userDto, []);
   } catch {
     return null;
   }

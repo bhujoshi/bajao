@@ -1,13 +1,18 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { GuestDTO, WeddingDTO } from "@/lib/types";
+import { useAuth } from "@/components/AuthProvider";
+import { GuestDTO, WeddingDTO, encodeUserHintHeader } from "@/lib/types";
 import { invitationOptions } from "@/lib/event-setup";
 import { MediaPreview } from "./EventSetupForm";
 type Delivery = {guestId:string;invitationKey:string;status:string;error:string|null};
-type Connection = {weddingTemplate?:boolean;testRecipients?:string[];ready:boolean;missing:string[];deliveries:Delivery[]};
-export default function WhatsAppInvitations({wedding,guests,onSent,initialGuestId=""}:{wedding:WeddingDTO;guests:GuestDTO[];onSent:()=>Promise<void>;initialGuestId?:string}) {
+type Connection = {weddingTemplate?:boolean;testRecipients?:string[];ready:boolean;connectionReady?:boolean;connectionMissing?:string[];weddingMissing?:string[];missing:string[];deliveries:Delivery[]};
+export default function WhatsAppInvitations({wedding,guests,onSent,onWeddingUpdated,onOpenSetup,initialGuestId=""}:{wedding:WeddingDTO;guests:GuestDTO[];onSent:()=>Promise<void>;onWeddingUpdated?:(wedding:WeddingDTO)=>void;onOpenSetup?:()=>void;initialGuestId?:string}) {
+  const { user } = useAuth();
   const [connection,setConnection] = useState<Connection|null>(null);
   const [testPhone,setTestPhone] = useState("");
+  const [groomName,setGroomName] = useState(wedding.setup.groomName);
+  const [brideName,setBrideName] = useState(wedding.setup.brideName);
+  const [savingNames,setSavingNames] = useState(false);
   const [guestId,setGuestId] = useState(initialGuestId);
   const [invitationKey,setInvitationKey] = useState(()=>{
     const assigned = guests.find(g=>g.id===initialGuestId)?.invitationKey;
@@ -23,18 +28,47 @@ export default function WhatsAppInvitations({wedding,guests,onSent,initialGuestI
   const choice = choices.find(o=>o.key===invitationKey);
   const prior = connection?.deliveries.find(d=>d.guestId===guestId&&d.invitationKey===invitationKey);
   const blocked = Boolean(prior && prior.status!=="failed");
+  useEffect(()=>{
+    setGroomName(wedding.setup.groomName);
+    setBrideName(wedding.setup.brideName);
+  },[wedding.id,wedding.setup.groomName,wedding.setup.brideName]);
   const refresh = useCallback(async()=>{
-    const response = await fetch(`/api/weddings/${wedding.id}/whatsapp`,{cache:"no-store"});
+    const response = await fetch(`/api/weddings/${wedding.id}/whatsapp`,{cache:"no-store",credentials:"same-origin",headers:{...encodeUserHintHeader(user)}});
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to load WhatsApp connection.");
     setConnection(data);
-  },[wedding.id]);
+  },[wedding.id,wedding.eventType,wedding.setup.groomName,wedding.setup.brideName,user]);
   useEffect(()=>{refresh().catch(e=>{setNotice(e.message);setError(true);});},[refresh]);
+  async function saveCoupleNames() {
+    const cleanGroom = groomName.trim();
+    const cleanBride = brideName.trim();
+    if (!cleanGroom || !cleanBride) {
+      setError(true);
+      setNotice("Enter both the groom’s name and the bride’s name.");
+      return;
+    }
+    if (busy || savingNames) return;
+    setSavingNames(true);setNotice("");setError(false);
+    try {
+      const response = await fetch(`/api/weddings/${wedding.id}`,{
+        method:"PATCH",
+        credentials:"same-origin",
+        headers:{"Content-Type":"application/json",...encodeUserHintHeader(user)},
+        body:JSON.stringify({groomName:cleanGroom,brideName:cleanBride}),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not save groom and bride names.");
+      onWeddingUpdated?.(data.wedding);
+      await refresh();
+      setNotice("Groom and bride names saved. You can now review and send the WhatsApp invitation.");
+    } catch(e) {setError(true);setNotice(e instanceof Error?e.message:"Could not save groom and bride names.");}
+    finally {setSavingNames(false);}
+  }
   async function send() {
     if (!guest || !choice || !consent || busy) return;
     setBusy(true);setNotice("");setError(false);
     try {
-      const response = await fetch(`/api/weddings/${wedding.id}/whatsapp`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({guestId:guest.id,invitationKey:choice.key,consentConfirmed:true})});
+      const response = await fetch(`/api/weddings/${wedding.id}/whatsapp`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...encodeUserHintHeader(user)},body:JSON.stringify({guestId:guest.id,invitationKey:choice.key,consentConfirmed:true})});
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Unable to send invitation.");
       setNotice(data.message);setReview(false);setConsent(false);
@@ -46,18 +80,35 @@ export default function WhatsAppInvitations({wedding,guests,onSent,initialGuestI
     if (!testPhone || busy) return;
     setBusy(true);setNotice("");setError(false);
     try {
-      const response = await fetch(`/api/weddings/${wedding.id}/whatsapp/test`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:testPhone})});
+      const response = await fetch(`/api/weddings/${wedding.id}/whatsapp/test`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",...encodeUserHintHeader(user)},body:JSON.stringify({phone:testPhone})});
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Sample send could not be confirmed.");
       setNotice(data.message);
     } catch(e) {setError(true);setNotice(e instanceof Error?e.message:"Sample send could not be confirmed.");}
     finally {setBusy(false);}
   }
+  const serverReady = connection ? (connection.connectionReady ?? connection.ready) : false;
+  const serverMissing = connection ? (connection.connectionMissing ?? connection.missing) : [];
+  const weddingMissing = connection?.weddingMissing ?? [];
+  const needsCoupleNames = Boolean(connection?.weddingTemplate && wedding.eventType === "Wedding" && (!wedding.setup.groomName.trim() || !wedding.setup.brideName.trim() || weddingMissing.includes("groom and bride names in event details")));
+  const needsWeddingEventType = Boolean(connection?.weddingTemplate && (wedding.eventType !== "Wedding" || weddingMissing.includes("a wedding event for the configured template")));
   const field = "w-full rounded-xl border border-stone-300 bg-white p-3 mt-1";
   return <section className="rounded-2xl border border-emerald-200 bg-white p-6 space-y-4">
     <h2 className="font-serif text-xl font-bold">Send through Memorica WhatsApp</h2>
     <p className="text-sm text-stone-600">Send a personal invitation directly from Memorica’s business number. The message links to your selected event or sub-event card.</p>
-    {!connection ? <p className="text-sm">Checking WhatsApp connection…</p> : !connection.ready ? <div className="rounded-xl bg-amber-50 p-4 text-sm"><strong>Connection setup needed</strong><p className="mt-1">Still needed: {connection.missing.join(", ")}. Sending will be available after these settings are complete.</p></div> : <p className="text-sm text-emerald-700">WhatsApp is configured for this account.</p>}
+    {!connection ? <p className="text-sm">Checking WhatsApp connection…</p> : !serverReady ? <div className="rounded-xl bg-amber-50 p-4 text-sm"><strong>Connection setup needed</strong><p className="mt-1">Still needed: {serverMissing.join(", ")}. Sending will be available after these settings are complete.</p></div> : <p className="text-sm text-emerald-700">WhatsApp is configured for this account.</p>}
+    {connection && needsWeddingEventType && <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm"><strong>Wedding event required</strong><p className="mt-1">The configured WhatsApp template is only for Wedding events. Use the regular <strong>Open WhatsApp</strong> button below for other event types.</p></div>}
+    {connection && needsCoupleNames && <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm space-y-3">
+      <div><strong>Groom and bride names needed</strong><p className="mt-1 text-stone-700">The active WhatsApp wedding template requires separate groom and bride names (existing couple names “{wedding.coupleNames}” are not automatically split). Save both names below to enable sending.</p></div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <label className="text-sm font-medium">Groom’s name *<input value={groomName} maxLength={160} disabled={busy||savingNames} onChange={e=>setGroomName(e.target.value)} placeholder="e.g. Arjun" className={field}/></label>
+        <label className="text-sm font-medium">Bride’s name *<input value={brideName} maxLength={160} disabled={busy||savingNames} onChange={e=>setBrideName(e.target.value)} placeholder="e.g. Meera" className={field}/></label>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" disabled={busy||savingNames||!groomName.trim()||!brideName.trim()} onClick={saveCoupleNames} className="rounded-xl bg-amber-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">{savingNames?"Saving…":"Save groom & bride names"}</button>
+        {onOpenSetup && <button type="button" disabled={busy||savingNames} onClick={onOpenSetup} className="text-xs font-semibold underline text-amber-900">Open Complete Event Details</button>}
+      </div>
+    </div>}
     {!!connection?.testRecipients?.length && <div className="rounded-xl bg-sky-50 border border-sky-200 p-4 space-y-3">
       <h3 className="font-semibold">Local WhatsApp test</h3>
       <p className="text-sm">Send Meta’s “Hello World” sample directly to a verified test number. This checks the connection; it does not send your event invitation or card.</p>

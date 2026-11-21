@@ -633,6 +633,18 @@ export async function createWedding(params: {
   return mapWeddingToDTO(created);
 }
 
+function applyCoupleNameUpdates(
+  setup: ReturnType<typeof parseEventSetup>,
+  updates: { groomName?: string; brideName?: string }
+) {
+  for (const key of ["groomName", "brideName"] as const) {
+    if (updates[key] !== undefined) {
+      if (typeof updates[key] !== "string") throw new Error("Invalid event details.");
+      setup[key] = updates[key].trim().slice(0, 500);
+    }
+  }
+}
+
 /**
  * FR-02: Edit wedding details (Owner only).
  */
@@ -641,6 +653,8 @@ export async function updateWedding(
   ownerUserId: string,
   updates: {
     setup?: unknown;
+    groomName?: string;
+    brideName?: string;
     coupleNames?: string;
     eventTitle?: string;
     date?: string;
@@ -722,6 +736,7 @@ export async function updateWedding(
 
   if (updates.setup !== undefined) {
     const setup = normalizeEventSetup(updates.setup);
+    applyCoupleNameUpdates(setup, updates);
     for (const asset of [setup.card, ...setup.photos, ...setup.subEvents.map(sub => sub.card)].filter(Boolean)) {
       const stored = asset && await prisma.eventAsset.findFirst({ where: { id: asset.id, weddingId } });
       if (!stored || !asset) throw new Error("Upload media to this event before saving.");
@@ -731,7 +746,14 @@ export async function updateWedding(
     validateSubEventDates(setup, finalStartDate, finalEndDate);
     dataToUpdate.setupDetails = JSON.stringify(setup);
   }
-  if (updates.setup === undefined) validateSubEventDates(parseEventSetup(wedding.setupDetails), finalStartDate, finalEndDate);
+  if (updates.setup === undefined) {
+    const setup = parseEventSetup(wedding.setupDetails);
+    if (updates.groomName !== undefined || updates.brideName !== undefined) {
+      applyCoupleNameUpdates(setup, updates);
+      dataToUpdate.setupDetails = JSON.stringify(setup);
+    }
+    validateSubEventDates(setup, finalStartDate, finalEndDate);
+  }
   const updated = await prisma.wedding.update({
     where: { id: weddingId },
     data: dataToUpdate,
