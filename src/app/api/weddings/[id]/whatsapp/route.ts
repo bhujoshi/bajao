@@ -19,10 +19,14 @@ export async function GET(_req:NextRequest,{params}:{params:{id:string}}) {
   if (!access) return NextResponse.json({error:"Only the event owner can view WhatsApp settings."},{status:403});
   const config = whatsappConfig();
   const enabled = config.hostIds.includes(access.user.id);
+  const connectionReady = !config.missing.length && enabled;
+  const connectionMissing = enabled
+    ? config.missing
+    : [...config.missing.filter(m => m !== "authorized sending account"), "authorization for this sending account"];
   const weddingMissing = config.weddingTemplate ? (access.wedding.eventType !== "Wedding" ? ["a wedding event for the configured template"] : !access.wedding.setup.groomName.trim() || !access.wedding.setup.brideName.trim() ? ["groom and bride names in event details"] : []) : [];
-  const missing = [...config.missing,...weddingMissing];
+  const missing = [...connectionMissing,...weddingMissing];
   const deliveries = await prisma.whatsAppInvitation.findMany({where:{guest:{weddingId:access.wedding.id}},select:{guestId:true,invitationKey:true,status:true,error:true,updatedAt:true}});
-  return NextResponse.json({testRecipients:whatsappTestRecipients(),weddingTemplate:config.weddingTemplate,ready:!missing.length && enabled,missing:enabled?missing:[...missing.filter(m=>m!=="authorized sending account"),"authorization for this sending account"],deliveries});
+  return NextResponse.json({testRecipients:whatsappTestRecipients(),weddingTemplate:config.weddingTemplate,connectionReady,connectionMissing,weddingMissing,ready:!missing.length && enabled,missing,deliveries});
 }
 export async function POST(req:NextRequest,{params}:{params:{id:string}}) {
   const access = await accessFor(params.id);

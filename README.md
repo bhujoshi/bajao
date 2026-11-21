@@ -6,7 +6,7 @@ Production web application for **Wedding Invitations & Live Guest Updates** buil
 
 1. **Install dependencies:**
    ```bash
-   npm install
+   npm install 
    ```
 
 2. **Push database schema:**

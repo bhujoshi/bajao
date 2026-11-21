@@ -1,6 +1,7 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { WeddingDTO } from "@/lib/types";
+import React, { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { WeddingDTO, encodeUserHintHeader } from "@/lib/types";
 import { EventMedia, SubEvent, missingEventDetails } from "@/lib/event-setup";
 import DateInput from "./DateInput";
 export function MediaPreview({ asset }: { asset: EventMedia }) {
@@ -12,13 +13,30 @@ export function MediaPreview({ asset }: { asset: EventMedia }) {
 export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mode = "details" }: {
   wedding: WeddingDTO; onSaved: (event: WeddingDTO) => void; onInvite: () => void; onNext?: () => void; mode?: "details" | "invitations";
 }) {
+  const { user } = useAuth();
   const [setup, setSetup] = useState(wedding.setup);
   const [message, setMessage] = useState(wedding.description || "");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState(false);
-  useEffect(() => { setSetup(wedding.setup); setMessage(wedding.description || ""); }, [wedding]);
+  const prevWeddingId = useRef(wedding.id);
+  const prevDescription = useRef(wedding.description || "");
+  useEffect(() => {
+    const nextDescription = wedding.description || "";
+    if (prevWeddingId.current !== wedding.id) {
+      prevWeddingId.current = wedding.id;
+      prevDescription.current = nextDescription;
+      setSetup(wedding.setup);
+      setMessage(nextDescription);
+      return;
+    }
+    if (prevDescription.current !== nextDescription) {
+      prevDescription.current = nextDescription;
+      setMessage(nextDescription);
+    }
+    setSetup(prev => mode === "details" ? wedding.setup : { ...prev, groomName: wedding.setup.groomName, brideName: wedding.setup.brideName });
+  }, [wedding, mode]);
   const missing = missingEventDetails({ ...wedding, setup, description: message });
   const isWedding = wedding.eventType === "Wedding";
   const coupleDone = Boolean(setup.groomName.trim() && setup.brideName.trim());
@@ -39,7 +57,7 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
         if (target === "photos" && !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) throw new Error("Choose JPG, PNG, WebP or GIF couple photos.");
         if (file.size > 20*1024*1024) throw new Error("Each file must be under 20 MB.");
         const form = new FormData(); form.append("file", file);
-        const response = await fetch(`/api/weddings/${wedding.id}/media`, {method:"POST", body:form});
+        const response = await fetch(`/api/weddings/${wedding.id}/media`, {method:"POST", credentials:"same-origin", headers:{...encodeUserHintHeader(user)}, body:form});
         const data = await response.json(); if (!response.ok) throw new Error(data.error);
         assets.push(data.asset);
       }
@@ -52,7 +70,9 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
     e.preventDefault();
     if (advance && missing.length) return; setBusy(true); setNotice(""); setError(false);
     try {
-      const response = await fetch(`/api/weddings/${wedding.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({setup,description:message})});
+      const payloadSetup = mode === "invitations" ? { ...setup, groomName: wedding.setup.groomName, brideName: wedding.setup.brideName } : setup;
+      const response = await fetch(`/api/weddings/${wedding.id}`,{method:"PATCH",credentials:"same-origin",headers:{"Content-Type":"application/json",...encodeUserHintHeader(user)},body:JSON.stringify({setup:payloadSetup,description:message})});
+
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
       onSaved(data.wedding);
       if (advance && !missingEventDetails(data.wedding).length) { onInvite(); return; }
@@ -84,6 +104,7 @@ export default function EventSetupForm({ wedding, onSaved, onInvite, onNext, mod
       <details className={sectionClass(breakdownDone)}>
         <summary className="cursor-pointer font-serif text-xl font-bold">2. Break down your event{doneMark(breakdownDone, true)}</summary>
         <p className="text-sm text-stone-600">This section is optional. Add celebrations such as Mehndi, Haldi and Wedding if you need them. Dates must fall within your overall event range. Times are local to your event venue.</p>
+
         {!setup.subEvents.length && <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-500">No sub-events yet. Keep a single event or add your schedule below.</p>}
         {setup.subEvents.map((sub,index)=><div key={sub.id} className="rounded-2xl border border-stone-200 p-4 space-y-3">
           <div className="flex items-center justify-between"><h4 className="font-semibold">Event {index+1}</h4><button type="button" onClick={()=>setSetup({...setup,subEvents:setup.subEvents.filter(item=>item.id!==sub.id)})} className="text-xs text-rose-700 underline">Remove sub-event</button></div>
